@@ -678,7 +678,7 @@
     </div>
     
     <div class="container mx-auto px-4 py-8 max-w-6xl">
-        <h1 class="text-3xl font-bold text-center mb-6">拼音練習遊戲</h1>
+        <h1 class="text-3xl font-bold text-center mb-6">小四級拼音練習遊戲</h1>
         
         <!-- 選擇與輸入界面 (簡化版) -->
         <div id="input-screen" class="mb-8">
@@ -898,9 +898,9 @@
                     <button id="show-answer" class="bg-yellow-500 hover:bg-yellow-600 text-white font-medium py-2.5 px-4 rounded-lg transition-all duration-200 shadow-sm hover:shadow">
                         顯示答案
                     </button>
-                    <!-- 跳過按鈕 -->
-                    <button id="skip-item" class="bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 font-medium py-2.5 px-4 rounded-lg transition-all duration-200 shadow-sm hover:shadow">
-                        跳過
+                    <!-- 完成按鈕 -->
+                    <button id="skip-item" class="bg-blue-500 hover:bg-blue-600 text-white font-medium py-2.5 px-4 rounded-lg transition-all duration-200 shadow-sm hover:shadow">
+                        完成
                     </button>
                 </div>
             </div>
@@ -1578,7 +1578,7 @@
             },
             
             // 檢查漢字的拼音是否正確
-            checkPinyin(character, userInput, requireTones = true) {
+            checkPinyin(character, userInput, requireTones = true, currentWord = null, charIndex = -1) {
                 if (!this.isPinyinProLoaded) {
                     console.warn('Pinyin Pro 未加載，無法檢查拼音');
                     return true; // 如果拼音庫未加載，默認接受用戶輸入
@@ -1587,6 +1587,67 @@
                 if (!character || !userInput) return false;
                 
                 try {
+                    // 特殊詞彙的位置相關答案映射表
+                    const specialWordMappings = {
+                        '一心一意': {
+                            0: ['yì'],  // 第一個「一」接受第四聲
+                            2: ['yí']   // 第二個「一」（位置2）接受第二聲
+                        },
+                        '伯伯': {
+                            1: ['bo']   // 第二個「伯」接受輕聲
+                        }
+                    };
+                    
+                    // 檢查是否在特殊詞彙中並且字符位置有特殊規則
+                    if (currentWord && specialWordMappings[currentWord] && 
+                        charIndex !== -1 && specialWordMappings[currentWord][charIndex]) {
+                        const acceptableAnswers = specialWordMappings[currentWord][charIndex];
+                        
+                        // 如果不需要聲調，去除聲調後比較
+                        if (!requireTones) {
+                            const userInputNoTones = this.removeTones(userInput.toLowerCase());
+                            return acceptableAnswers.some(answer => 
+                                this.removeTones(answer.toLowerCase()) === userInputNoTones
+                            );
+                        }
+                        
+                        // 需要聲調時，檢查是否匹配任何一個可接受的答案
+                        return acceptableAnswers.some(answer => 
+                            userInput.toLowerCase() === answer.toLowerCase()
+                        );
+                    }
+                    
+                    // 特殊字符的多重正確答案映射表（用於非位置相關的特殊情況）
+                    const specialCharacters = {
+                        '舞': ['wǔ'],        // 舞字只接受第三聲
+                        '一': ['yī', 'yí', 'yì'],  // 一字接受第一聲、第二聲和第四聲（當不在特殊詞彙中時）
+                        '組': ['zǔ', 'zú'],   // 組字接受第三聲和第二聲（三聲變調）
+                        '長': ['zhǎng'],     // 長字標準答案
+                        '地': ['de'],        // 地字接受輕聲（文章模式中「小明主動地參加了義工活動」）
+                        '北': ['běi', 'béi'], // 北字接受第三聲和第二聲
+                        '伯': ['bó'],        // 伯字標準答案為第二聲
+                        '的': ['de']         // 的字只接受輕聲
+                    };
+                    
+                    // 檢查是否為特殊字符
+                    if (specialCharacters[character]) {
+                        const acceptableAnswers = specialCharacters[character];
+                        
+                        // 如果不需要聲調，去除聲調後比較
+                        if (!requireTones) {
+                            const userInputNoTones = this.removeTones(userInput.toLowerCase());
+                            return acceptableAnswers.some(answer => 
+                                this.removeTones(answer.toLowerCase()) === userInputNoTones
+                            );
+                        }
+                        
+                        // 需要聲調時，檢查是否匹配任何一個可接受的答案
+                        return acceptableAnswers.some(answer => 
+                            userInput.toLowerCase() === answer.toLowerCase()
+                        );
+                    }
+                    
+                    // 非特殊字符，使用標準檢查邏輯
                     // 獲取標準拼音
                     const standardPinyin = this.getStandardPinyin(character, requireTones);
                     
@@ -2229,8 +2290,9 @@
                     charContainer.dataset.errorCount = '0';
                 }
                 
-                // 檢查拼音
-                const isCorrect = DataManager.checkPinyin(char, userInput, GameLogic.requireTones);
+                // 檢查拼音（傳遞當前詞彙和字符索引用於特殊處理）
+                const currentWord = GameLogic.currentWord ? GameLogic.currentWord.word : null;
+                const isCorrect = DataManager.checkPinyin(char, userInput, GameLogic.requireTones, currentWord, index);
                 
                 if (isCorrect) {
                     input.classList.add("correct");
@@ -2545,8 +2607,8 @@
                     charSpan.dataset.errorCount = '0';
                 }
                 
-                // 檢查拼音
-                const isCorrect = DataManager.checkPinyin(char, userInput, GameLogic.requireTones);
+                // 檢查拼音（對於文章模式，我們需要檢查是否在特殊詞彙中）
+                const isCorrect = DataManager.checkPinyin(char, userInput, GameLogic.requireTones, null, -1);
                 
                 if (isCorrect) {
                     input.classList.add("correct");
@@ -4064,11 +4126,11 @@
         // 預設輸入內容
         function setDefaultContent() {
             // 詞彙模式預設內容 - 請在這裡修改預設詞彙
-            const defaultVocabulary = "散散步\n好處\n糊塗\n舒服\n藝術\n復活節\n從早到晚\n湖光山色\n名不虛傳\n教訓\n全體\n日月潭\n遠離\n市區";
+            const defaultVocabulary = "作文\n跳舞\n留學生";
             document.getElementById('vocabulary-text').value = defaultVocabulary;
             
             // 文章模式預設內容 - 請在這裡修改預設文章
-            const defaultArticle = "老師常常告訴我們「學無止境」，除了課本，實在還有很多知識得學習呢。\n此時此刻，我們心中既對新生活充滿憧憬和盼望，又對母校依依不捨。";
+            const defaultArticle = "真正的朋友總會互相幫助。";
             document.getElementById('article-text').value = defaultArticle;
         }
         
