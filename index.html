@@ -1,0 +1,4105 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>拼音練習遊戲</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- 引入 Pinyin Pro 庫 -->
+    <script src="https://unpkg.com/pinyin-pro@3.19.4/dist/index.js"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#5D5CDE',
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&display=swap');
+        
+        body {
+            font-family: 'Noto Sans TC', sans-serif;
+        }
+        
+        /* 連擊計數器樣式 */
+        .combo-counter {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background: rgba(93, 92, 222, 0.85);
+            color: white;
+            border-radius: 12px;
+            padding: 8px 16px;
+            font-weight: bold;
+            font-size: 1rem;
+            transition: all 0.3s ease;
+            box-shadow: 0 3px 10px rgba(0, 0, 0, 0.2);
+            z-index: 1000;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        /* 連擊數字樣式 */
+        .combo-number {
+            font-size: 1.5rem;
+            font-weight: 800;
+            color: #FFD700;
+            text-shadow: 0 0 3px rgba(0, 0, 0, 0.5);
+        }
+        
+        /* 連擊動畫 */
+        .combo-pulse {
+            animation: comboPulse 0.5s ease;
+        }
+        
+        @keyframes comboPulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.3); }
+            100% { transform: scale(1); }
+        }
+        
+        /* 連擊等級變化 */
+        .combo-counter.level-2 {
+            background: rgba(75, 192, 192, 0.85);
+        }
+        
+        .combo-counter.level-3 {
+            background: rgba(255, 159, 64, 0.85);
+        }
+        
+        .combo-counter.level-4 {
+            background: rgba(255, 99, 132, 0.85);
+        }
+        
+        .combo-counter.level-5 {
+            background: rgba(153, 102, 255, 0.85);
+            box-shadow: 0 3px 15px rgba(153, 102, 255, 0.5);
+        }
+        
+        /* 音效控制樣式 */
+        .sound-toggle {
+            position: fixed;
+            bottom: 20px;
+            left: 20px;
+            background: rgba(255, 255, 255, 0.85);
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            z-index: 1000;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+            transition: all 0.2s ease;
+        }
+        
+        .sound-toggle:hover {
+            transform: scale(1.1);
+            box-shadow: 0 3px 8px rgba(0, 0, 0, 0.15);
+        }
+        
+        .dark .sound-toggle {
+            background: rgba(55, 65, 81, 0.85);
+            color: white;
+        }
+        
+        /* 巴士主題進度條樣式 */
+        .bus-progress-container {
+            margin-top: 25px;
+        }
+
+        /* 道路樣式 */
+        .road-background {
+            position: relative;
+            box-shadow: inset 0 2px 4px rgba(0,0,0,0.1);
+            background-color: #E5E7EB; /* 淺灰色道路 */
+        }
+        
+        .dark .road-background {
+            background-color: #4B5563; /* 深色模式下深灰色道路 */
+        }
+
+        /* 道路中間線 */
+        .road-line {
+            position: absolute;
+            top: 50%;
+            left: 0;
+            right: 0;
+            height: 2px;
+            background: repeating-linear-gradient(to right, white, white 10px, transparent 10px, transparent 20px);
+        }
+
+        .dark .road-line {
+            background: repeating-linear-gradient(to right, #6B7280, #6B7280 10px, transparent 10px, transparent 20px);
+        }
+
+        /* 已行駛的路段 */
+        .road-completed {
+            background: linear-gradient(to right, #10B981, #5D5CDE);
+            transition: width 0.5s ease;
+            position: absolute;
+            bottom: 0;
+            height: 100%;
+        }
+
+        /* 巴士圖標 - 使用更大的emoji 並水平反轉 */
+        .bus-body {
+            font-size: 42px;
+            line-height: 1;
+            position: relative;
+            transition: transform 0.3s ease;
+            transform: scaleX(-1); /* 水平反轉，讓巴士朝向右側 */
+        }
+
+        .bus-body:after {
+            content: '🚌';
+        }
+
+        /* 巴士懸浮效果 */
+        #bus-icon:hover .bus-body {
+            transform: translateY(-3px) scaleX(-1);
+        }
+
+        /* 站點標記 */
+        .bus-stop {
+            position: absolute;
+            top: -20px;
+            width: 6px;
+            height: 18px;
+            background-color: #6B7280;
+            transform: translateX(-3px);
+        }
+
+        .bus-stop:after {
+            content: attr(data-label);
+            position: absolute;
+            top: -20px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 12px;
+            color: #6B7280;
+            white-space: nowrap;
+        }
+
+        .dark .bus-stop {
+            background-color: #D1D5DB;
+        }
+
+        .dark .bus-stop:after {
+            color: #D1D5DB;
+        }
+        
+        /* 到達終點動畫 */
+        #bus-icon.at-destination .bus-body {
+            animation: busArrived 1s ease infinite alternate;
+        }
+        
+        @keyframes busArrived {
+            0% { transform: translateY(0) scaleX(-1); }
+            100% { transform: translateY(-5px) scaleX(-1); }
+        }
+
+        /* 文章模式樣式 */
+        .article-text {
+            line-height: 2.5;
+            text-align: left;
+        }
+        
+        .article-char {
+            position: relative;
+            display: inline-flex;
+            flex-direction: column;
+            align-items: center;
+            margin: 0 2px;
+            padding: 2px;
+        }
+        
+        .article-char.current {
+            background-color: rgba(93, 92, 222, 0.1);
+            border-radius: 4px;
+        }
+        
+        .article-char.completed {
+            color: #10B981;
+        }
+        
+        .article-char.skipped {
+            color: #9CA3AF;
+            text-decoration: line-through;
+        }
+        
+        /* 文章模式的輸入容器 */
+        .article-input-container {
+            position: absolute;
+            top: -60px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 90px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            background: white;
+            border: 2px solid #5D5CDE;
+            border-radius: 6px;
+            z-index: 10;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.2s;
+            padding: 2px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+        }
+        
+        .article-char.current .article-input-container {
+            opacity: 1;
+            pointer-events: auto;
+        }
+        
+        /* 詞彙模式的輸入容器 */
+        .vocab-input-container {
+            position: absolute;
+            top: -60px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 90px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            background: white;
+            border: 2px solid #5D5CDE;
+            border-radius: 6px;
+            z-index: 10;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.2s;
+            padding: 2px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+        }
+        
+        .char-container.active-char .vocab-input-container {
+            opacity: 1;
+            pointer-events: auto;
+        }
+        
+        /* 輸入框樣式 */
+        .pinyin-input {
+            width: 100%;
+            height: 28px;
+            font-size: 14px;
+            text-align: center;
+            border: none;
+            outline: none;
+            background-color: rgba(255, 255, 255, 0.95);
+            padding: 4px;
+        }
+        
+        .pinyin-input.correct {
+            background-color: rgba(16, 185, 129, 0.1);
+        }
+        
+        .pinyin-input.incorrect {
+            background-color: rgba(239, 68, 68, 0.1);
+        }
+        
+        /* 新增: 檢查中狀態 */
+        .pinyin-input.checking {
+            background-color: rgba(247, 233, 159, 0.2);
+            border-color: #f7e99f;
+        }
+        
+        /* 新增: 無效聲調數字輸入狀態 */
+        .pinyin-input.invalid-tone {
+            background-color: rgba(254, 226, 226, 0.6);
+            border: 1px solid #f56565;
+        }
+        
+        .dark .pinyin-input.invalid-tone {
+            background-color: rgba(254, 202, 202, 0.2);
+            border: 1px solid #f56565;
+        }
+        
+        /* 提示樣式 */
+        .pinyin-input.has-hint {
+            background-color: rgba(243, 244, 246, 0.5);
+            position: relative;
+        }
+        
+        .dark .pinyin-input.has-hint {
+            background-color: rgba(75, 85, 99, 0.5);
+        }
+        
+        /* 提示保護動畫 */
+        .pinyin-input.protected-hint {
+            animation: protectedHintPulse 0.3s ease;
+        }
+        
+        @keyframes protectedHintPulse {
+            0% { background-color: rgba(254, 226, 226, 0.2); }
+            50% { background-color: rgba(254, 202, 202, 0.5); }
+            100% { background-color: rgba(254, 226, 226, 0.2); }
+        }
+        
+        /* 計分顯示樣式 */
+        #score-display {
+            transition: all 0.3s ease;
+            z-index: 1000;
+        }
+
+        #current-score {
+            transition: all 0.2s ease;
+        }
+
+        /* 分數動畫效果 */
+        @keyframes scoreFloat {
+            0% { opacity: 0; transform: translateY(0); }
+            20% { opacity: 1; }
+            80% { opacity: 1; }
+            100% { opacity: 0; transform: translateY(-20px); }
+        }
+
+        /* 成績報告樣式 */
+        .score-report {
+            font-family: 'Noto Sans TC', sans-serif;
+            transition: all 0.3s ease;
+        }
+
+        .score-report:hover {
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+            transform: translateY(-2px);
+        }
+        
+        /* 錯誤提示樣式 */
+        .error-tip {
+            position: absolute;
+            bottom: -20px;
+            left: 0;
+            width: 100%;
+            text-align: center;
+            font-size: 12px;
+            color: #e53e3e;
+            background: rgba(255, 255, 255, 0.9);
+            padding: 2px;
+            border-radius: 3px;
+            z-index: 5;
+        }
+        
+        .dark .error-tip {
+            color: #f56565;
+            background: rgba(31, 41, 55, 0.9);
+        }
+        
+        /* 聲調選擇器樣式 - 放在輸入框上方 */
+        .tone-selector {
+            display: flex;
+            width: 100%;
+            background-color: #f9fafb;
+            border-radius: 4px 4px 0 0;
+            border-bottom: 1px solid #ddd;
+        }
+        
+        .tone-selector button {
+            flex: 1;
+            padding: 4px 0;
+            font-size: 14px;
+            background: transparent;
+            border: none;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        
+        .tone-selector button:hover {
+            background: #e8e8e8;
+        }
+        
+        /* 詞彙模式字符容器 */
+        .char-container {
+            position: relative;
+            display: inline-block;
+            margin: 10px;
+        }
+        
+        .char-container.completed .char-display {
+            color: #10B981;
+            border-color: #10B981;
+        }
+        
+        .char-container.skipped .char-display {
+            color: #9CA3AF;
+            border-color: #9CA3AF;
+            text-decoration: line-through;
+        }
+        
+        .char-display {
+            width: 60px;
+            height: 60px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            font-weight: bold;
+            background-color: #f3f4f6;
+            border-radius: 8px;
+            border: 2px solid transparent;
+            transition: all 0.2s;
+        }
+        
+        .char-container.active-char .char-display {
+            border-color: #5D5CDE;
+            background-color: rgba(93, 92, 222, 0.1);
+        }
+        
+        /* 響應式調整 */
+        @media (max-width: 640px) {
+            .article-input-container,
+            .vocab-input-container {
+                width: 80px;
+            }
+            
+            .char-display {
+                width: 50px;
+                height: 50px;
+                font-size: 20px;
+            }
+        }
+        
+        @media (max-width: 480px) {
+            .article-input-container,
+            .vocab-input-container {
+                width: 70px;
+            }
+            
+            .char-display {
+                width: 40px;
+                height: 40px;
+                font-size: 18px;
+            }
+        }
+        
+        /* 跳過按鈕樣式 */
+        .skip-btn {
+            background-color: #f3f4f6;
+            border: 1px solid #d1d5db;
+            color: #374151;
+            padding: 0.5rem 1rem;
+            border-radius: 0.375rem;
+            font-weight: 500;
+            transition: all 0.2s;
+        }
+        
+        .skip-btn:hover {
+            background-color: #e5e7eb;
+        }
+
+        /* 深色模式下的 tooltip 修正 */
+        .dark .vocab-input-container,
+        .dark .article-input-container {
+            background: #1f2937;
+            border-color: #5D5CDE;
+        }
+        
+        .dark .tone-selector {
+            background-color: #374151;
+            border-bottom: 1px solid #4b5563;
+        }
+        
+        .dark .tone-selector button:hover {
+            background: #4b5563;
+        }
+        
+        .dark .pinyin-input {
+            background-color: rgba(31, 41, 55, 0.95);
+            color: #e5e7eb;
+        }
+        
+        /* 聲調說明標籤 */
+        .tone-label {
+            position: absolute;
+            top: -20px;
+            left: 0;
+            width: 100%;
+            text-align: center;
+            font-size: 11px;
+            color: #6b7280;
+        }
+        
+        .dark .tone-label {
+            color: #9ca3af;
+        }
+        
+        /* 系統答案樣式 */
+        .article-char.system-answer {
+            color: #EAAA08 !important;
+        }
+        
+        .char-container.system-answer .char-display {
+            color: #EAAA08 !important;
+            border-color: #EAAA08 !important;
+        }
+        
+        .dark .article-char.system-answer {
+            color: #FCD34D !important;
+        }
+        
+        .dark .char-container.system-answer .char-display {
+            color: #FCD34D !important;
+            border-color: #FCD34D !important;
+        }
+        
+        /* 加載指示器樣式 */
+        .loading-spinner {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(93, 92, 222, 0.3);
+            border-radius: 50%;
+            border-top-color: #5D5CDE;
+            animation: spin 1s ease-in-out infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        
+        /* 連續輸入模式反饋動畫 */
+        .correct-animation {
+            animation: correctPulse 0.5s ease;
+        }
+
+        .incorrect-animation {
+            animation: incorrectShake 0.5s ease;
+        }
+
+        @keyframes correctPulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.05); box-shadow: 0 0 15px rgba(16, 185, 129, 0.5); }
+            100% { transform: scale(1); }
+        }
+
+        @keyframes incorrectShake {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-5px); }
+            75% { transform: translateX(5px); }
+        }
+        
+        /* 增強已完成漢字的視覺效果 */
+        .char-container.completed .char-display {
+            color: #10B981;
+            border-color: #10B981;
+            box-shadow: 0 0 5px rgba(16, 185, 129, 0.3);
+            transform: scale(1.02);
+            transition: all 0.2s ease;
+        }
+
+        /* 聚焦狀態增强 */
+        .char-container.active-char .char-display {
+            border-color: #5D5CDE;
+            background-color: rgba(93, 92, 222, 0.1);
+            box-shadow: 0 0 8px rgba(93, 92, 222, 0.5);
+            transform: scale(1.05);
+            transition: all 0.2s ease;
+        }
+        
+        /* 視覺改進：權限檢查區域樣式 */
+        .permission-check-container {
+            border: 1px solid rgba(93, 92, 222, 0.3);
+            border-radius: 12px;
+            padding: 14px;
+            margin-bottom: 18px;
+            background-color: rgba(93, 92, 222, 0.03);
+            box-shadow: 0 2px 8px rgba(93, 92, 222, 0.05);
+            transition: all 0.3s ease;
+        }
+        
+        .permission-check-container:hover {
+            box-shadow: 0 3px 12px rgba(93, 92, 222, 0.1);
+        }
+        
+        .dark .permission-check-container {
+            background-color: rgba(93, 92, 222, 0.06);
+            border-color: rgba(93, 92, 222, 0.4);
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+        }
+        
+        /* 步驟標記改進 */
+        .step-marker {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            background-color: #5D5CDE;
+            color: white;
+            font-weight: bold;
+            margin-right: 10px;
+            box-shadow: 0 2px 4px rgba(93, 92, 222, 0.3);
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+        
+        .step-container:hover .step-marker {
+            transform: scale(1.05);
+            box-shadow: 0 3px 6px rgba(93, 92, 222, 0.4);
+        }
+        
+        /* 步驟容器樣式 */
+        .step-container {
+            margin-bottom: 22px;
+            transition: transform 0.2s ease;
+        }
+        
+        .step-title {
+            font-weight: 600;
+            font-size: 1.15rem;
+            display: flex;
+            align-items: center;
+            margin-bottom: 12px;
+        }
+    </style>
+</head>
+<body class="bg-white dark:bg-gray-900 text-gray-800 dark:text-gray-100 min-h-screen">
+    <!-- 連擊計數器 -->
+    <div id="combo-counter" class="combo-counter hidden">
+        <span>連擊：</span>
+        <span id="combo-number" class="combo-number">0</span>
+    </div>
+    
+    <!-- 音效控制 -->
+    <div id="sound-toggle" class="sound-toggle">
+        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-volume-2">
+            <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+            <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path>
+        </svg>
+    </div>
+    
+    <div class="container mx-auto px-4 py-8 max-w-6xl">
+        <h1 class="text-3xl font-bold text-center mb-6">拼音練習遊戲</h1>
+        
+        <!-- 選擇與輸入界面 (簡化版) -->
+        <div id="input-screen" class="mb-8">
+            <!-- 步驟 1: 選擇模式 -->
+            <div class="mb-4">
+                <div class="flex items-center mb-2">
+                    <div class="bg-primary text-white w-6 h-6 rounded-full flex items-center justify-center text-sm font-bold mr-2">1</div>
+                    <h2 class="text-base font-semibold">選擇練習模式</h2>
+                </div>
+                <div class="border-b border-gray-200 dark:border-gray-700 mb-2">
+                    <ul class="flex flex-wrap -mb-px text-base">
+                        <li class="mr-2">
+                            <button id="vocabulary-mode-btn" class="inline-block py-3 px-5 border-b-2 border-primary bg-primary/10 text-primary font-medium rounded-t-lg transition-all">
+                                詞彙模式
+                            </button>
+                        </li>
+                        <li class="mr-2">
+                            <button id="article-mode-btn" class="inline-block py-3 px-5 border-b-2 border-transparent hover:bg-gray-100 dark:hover:bg-gray-800 font-medium rounded-t-lg transition-all">
+                                文章模式
+                            </button>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+            
+            <!-- 步驟 2: 準備練習內容 -->
+            <div class="mb-4">
+                <div class="flex items-center justify-between mb-2">
+                    <div class="flex items-center">
+                        <div class="bg-primary text-white w-6 h-6 rounded-full flex items-center justify-center text-sm font-bold mr-2">2</div>
+                        <h2 class="text-base font-semibold">準備練習內容</h2>
+                    </div>
+                    <a href="https://docs.google.com/document/d/14_JuWJ0Bu-pLm0WgSKkHXWToSIwkrZxDg4DWBXzcpNU/edit?usp=sharing" 
+                       target="_blank" 
+                       class="bg-primary hover:bg-primary/90 text-white py-2 px-4 rounded-lg text-sm flex items-center whitespace-nowrap transition-all duration-200 shadow-sm hover:shadow">
+                        <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V7a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                        </svg>
+                        從Google Docs獲取
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3 ml-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                        </svg>
+                    </a>
+                </div>
+            </div>
+            
+            <!-- 詞彙輸入區 -->
+            <div id="vocabulary-input" class="mb-4 bg-white dark:bg-gray-800 p-4 rounded-lg shadow-sm">
+                <div class="text-sm text-gray-600 dark:text-gray-400 mb-2">在下方輸入詞彙，每行一個或用逗號分隔多個：</div>
+                <textarea id="vocabulary-text" class="w-full px-3 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg h-32 focus:ring-2 focus:ring-primary focus:border-primary transition-all text-base" placeholder="例如:&#10;學習&#10;工作&#10;朋友"></textarea>
+            </div>
+            
+            <!-- 文章輸入區 -->
+            <div id="article-input" class="mb-4 hidden bg-white dark:bg-gray-800 p-4 rounded-lg shadow-sm">
+                <div class="text-sm text-gray-600 dark:text-gray-400 mb-2">在下方輸入文章內容：</div>
+                <textarea id="article-text" class="w-full px-3 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg h-32 focus:ring-2 focus:ring-primary focus:border-primary transition-all text-base" placeholder="輸入想要練習的文章..."></textarea>
+            </div>
+            
+            <!-- 選項區 - 隱藏選擇器但保留功能 -->
+            <div class="mb-6 hidden">
+                <div class="flex items-center">
+                    <input type="checkbox" id="require-tones" class="mr-2 h-5 w-5 text-primary focus:ring-primary rounded" checked>
+                    <label for="require-tones" class="text-lg">需要輸入聲調</label>
+                </div>
+                
+                <div class="flex items-center mt-3">
+                    <input type="checkbox" id="continuous-mode" class="mr-2 h-5 w-5 text-primary focus:ring-primary rounded" checked>
+                    <label for="continuous-mode" class="text-lg">連續輸入模式</label>
+                </div>
+            </div>
+            
+            <!-- 可折叠的声调说明 -->
+            <details class="mb-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
+                <summary class="px-4 py-2 text-blue-700 dark:text-blue-400 cursor-pointer font-medium flex items-center">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" viewBox="0 0 20 20" fill="currentColor">
+                        <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2h-1V9z" clip-rule="evenodd" />
+                    </svg>
+                    如何輸入聲調 (點擊展開)
+                </summary>
+                <div class="p-4 border-t border-gray-200 dark:border-gray-700">
+                    <div class="flex flex-col md:flex-row gap-4">
+                        <div class="flex-1 bg-white dark:bg-gray-700 p-3 rounded-lg">
+                            <p class="text-sm text-gray-700 dark:text-gray-300">
+                                <strong class="block mb-2 border-b pb-1 border-gray-200 dark:border-gray-600">方法一：使用按鈕</strong>
+                                1. 先輸入拼音（不帶聲調），例如: <span class="font-medium">ni</span><br>
+                                2. 點擊對應的聲調按鈕：<br>
+                                <div class="flex flex-wrap gap-1 mt-2 mb-1">
+                                    <span class="inline-block p-1 bg-white dark:bg-gray-800 rounded border border-gray-200 dark:border-gray-600 text-center w-10 shadow-sm">¯</span> 
+                                    <span class="text-sm">第一聲</span>
+                                </div>
+                                <div class="flex flex-wrap gap-1 mb-1">
+                                    <span class="inline-block p-1 bg-white dark:bg-gray-800 rounded border border-gray-200 dark:border-gray-600 text-center w-10 shadow-sm">ˊ</span> 
+                                    <span class="text-sm">第二聲</span>
+                                </div>
+                                <div class="flex flex-wrap gap-1 mb-1">
+                                    <span class="inline-block p-1 bg-white dark:bg-gray-800 rounded border border-gray-200 dark:border-gray-600 text-center w-10 shadow-sm">ˇ</span> 
+                                    <span class="text-sm">第三聲</span>
+                                </div>
+                                <div class="flex flex-wrap gap-1 mb-1">
+                                    <span class="inline-block p-1 bg-white dark:bg-gray-800 rounded border border-gray-200 dark:border-gray-600 text-center w-10 shadow-sm">ˋ</span> 
+                                    <span class="text-sm">第四聲</span>
+                                </div>
+                                <div class="flex flex-wrap gap-1">
+                                    <span class="inline-block p-1 bg-white dark:bg-gray-800 rounded border border-gray-200 dark:border-gray-600 text-center w-10 shadow-sm">．</span> 
+                                    <span class="text-sm">輕聲</span>
+                                </div>
+                            </p>
+                        </div>
+                        <div class="flex-1 bg-white dark:bg-gray-700 p-3 rounded-lg">
+                            <p class="text-sm text-gray-700 dark:text-gray-300">
+                                <strong class="block mb-2 border-b pb-1 border-gray-200 dark:border-gray-600">方法二：使用數字</strong>
+                                直接在拼音後面輸入數字1-5代表相應聲調：
+                                <div class="mt-3 mb-1 bg-gray-100 dark:bg-gray-800 p-2 rounded">
+                                    <code class="font-medium">ni3</code> → <code class="font-medium">nǐ</code> (第三聲)
+                                </div>
+                                <div class="mb-1 bg-gray-100 dark:bg-gray-800 p-2 rounded">
+                                    <code class="font-medium">shui3</code> → <code class="font-medium">shuǐ</code> (第三聲)
+                                </div>
+                                <div class="mb-1 bg-gray-100 dark:bg-gray-800 p-2 rounded">
+                                    <code class="font-medium">hao1</code> → <code class="font-medium">hāo</code> (第一聲)
+                                </div>
+                                <div class="text-gray-500 dark:text-gray-400 text-xs mt-2">
+                                    * 數字1-5分別對應第一至第四聲以及輕聲
+                                </div>
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </details>
+            
+            <!-- 步驟 3: 開始練習 -->
+            <div class="flex items-center mb-4">
+                <div class="bg-primary text-white w-6 h-6 rounded-full flex items-center justify-center text-sm font-bold mr-2">3</div>
+                <h2 class="text-base font-semibold">開始練習</h2>
+            </div>
+            <button id="start-practice" class="w-full py-3.5 bg-green-600 hover:bg-green-700 text-white font-bold rounded-lg transition-all duration-200 shadow-md hover:shadow-lg transform hover:-translate-y-0.5 text-lg flex items-center justify-center" disabled>
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor">
+                    <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clip-rule="evenodd" />
+                </svg>
+                開始練習
+            </button>
+        </div>
+        
+        <!-- 練習界面 -->
+        <div id="practice-screen" class="hidden">
+            <!-- 進度區 -->
+            <div class="mb-6">
+                <div class="flex items-center justify-between mb-2">
+                    <span id="progress-text" class="text-lg font-semibold">進度: 0/0</span>
+                    <span id="mode-indicator" class="text-sm bg-primary text-white py-1 px-3 rounded-lg">詞彙模式</span>
+                </div>
+                <!-- 巴士進度條 -->
+                <div class="bus-progress-container relative h-16 mb-2">
+                    <!-- 道路背景 -->
+                    <div class="road-background w-full h-8 bg-gray-300 dark:bg-gray-700 rounded-lg overflow-hidden relative">
+                        <!-- 道路中間線 -->
+                        <div class="road-line"></div>
+                        
+                        <!-- 站點標記 -->
+                        <div class="bus-stop" style="left: 25%" data-label="25%"></div>
+                        <div class="bus-stop" style="left: 50%" data-label="50%"></div>
+                        <div class="bus-stop" style="left: 75%" data-label="75%"></div>
+                        <div class="bus-stop" style="left: 98%" data-label="終點"></div>
+                        
+                        <!-- 進度條 (使用漸變色表示已行駛路段) -->
+                        <div id="progress-bar" class="h-full road-completed rounded-l-lg" style="width: 0%"></div>
+                    </div>
+                    
+                    <!-- 巴士圖標 - 只讓車輪部分嵌入道路中 -->
+                    <div id="bus-icon" class="absolute transition-all duration-500" style="left: 0%; top: -30px;">
+                        <div class="bus-body"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 詞彙練習界面 -->
+            <div id="vocabulary-practice" class="mb-8">
+                <h2 class="text-xl font-semibold mb-4">請為每個漢字輸入拼音</h2>
+                
+                <!-- 詞彙卡片 -->
+                <div id="word-card" class="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-md mb-4">
+                    <div id="word-display" class="text-center mb-6 text-3xl font-bold">
+                        <!-- 詞彙將在這裡顯示 -->
+                    </div>
+                    
+                    <div id="pinyin-inputs" class="flex justify-center flex-wrap gap-6 pt-12">
+                        <!-- 拼音輸入框將在這裡生成 -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- 文章練習界面 -->
+            <div id="article-practice" class="mb-8 hidden">
+                <h2 class="text-xl font-semibold mb-4">
+                    點擊漢字輸入拼音
+                </h2>
+                
+                <div class="bg-white dark:bg-gray-800 rounded-lg p-4 shadow mb-4">
+                    <div id="article-display" class="article-text text-lg">
+                        <!-- 文章內容將在這裡顯示 -->
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 操作按鈕 -->
+            <div class="flex justify-between mb-4">
+                <button id="back-to-input" class="bg-gray-500 hover:bg-gray-600 text-white font-medium py-2.5 px-6 rounded-lg transition-all duration-200 shadow-sm hover:shadow">
+                    返回
+                </button>
+                
+                <div class="flex gap-2">
+                    <!-- 直接提交按鈕 - 新增 -->
+                    <button id="submit-directly" onclick="GameLogic.submitCurrentProgress()" class="bg-blue-500 hover:bg-blue-600 text-white font-medium py-2.5 px-4 rounded-lg transition-all duration-200 shadow-sm hover:shadow">
+                        直接提交
+                    </button>
+                    <!-- 顯示答案按鈕 -->
+                    <button id="show-answer" class="bg-yellow-500 hover:bg-yellow-600 text-white font-medium py-2.5 px-4 rounded-lg transition-all duration-200 shadow-sm hover:shadow">
+                        顯示答案
+                    </button>
+                    <!-- 跳過按鈕 -->
+                    <button id="skip-item" class="bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 font-medium py-2.5 px-4 rounded-lg transition-all duration-200 shadow-sm hover:shadow">
+                        跳過
+                    </button>
+                </div>
+            </div>
+            
+            <!-- 反饋信息 -->
+            <div id="feedback-message" class="mt-4 text-center text-lg hidden"></div>
+        </div>
+        
+        <!-- 完成界面 -->
+        <div id="completion-screen" class="hidden text-center">
+            <h2 class="text-2xl font-bold mb-4">練習完成！</h2>
+            <div class="bg-white dark:bg-gray-800 rounded-lg p-6 shadow-md mb-6">
+                <div class="text-4xl mb-4">🎉</div>
+                <div id="completion-message" class="text-xl font-bold text-green-600 dark:text-green-400 mb-6">
+                    太棒了！你完成了所有練習！
+                </div>
+                
+                <div id="stats-display" class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div class="bg-gray-100 dark:bg-gray-700 p-4 rounded-lg shadow-sm transition-all hover:shadow">
+                        <div class="text-lg text-gray-600 dark:text-gray-300">總漢字數</div>
+                        <div id="total-count" class="text-2xl font-bold text-primary">0</div>
+                    </div>
+                    <div class="bg-gray-100 dark:bg-gray-700 p-4 rounded-lg shadow-sm transition-all hover:shadow">
+                        <div class="text-lg text-gray-600 dark:text-gray-300">用時</div>
+                        <div id="time-spent" class="text-2xl font-bold text-purple-500">0:00</div>
+                    </div>
+                    <div class="bg-gray-100 dark:bg-gray-700 p-4 rounded-lg shadow-sm transition-all hover:shadow border-2 border-green-300 dark:border-green-700">
+                        <div class="text-lg text-gray-700 dark:text-gray-200 font-medium">實際完成漢字數</div>
+                        <div id="actual-count" class="text-3xl font-bold text-green-500">0</div>
+                        <div class="text-xs text-center mt-1 bg-green-100 dark:bg-green-900/40 text-green-800 dark:text-green-300 py-1 px-2 rounded">
+                            此數字為提交表單的成績
+                        </div>
+                    </div>
+                </div>
+                
+                <div id="answers-info" class="mt-4 text-sm text-gray-600 dark:text-gray-400">
+                    <div id="skipped-info" class="hidden">
+                        <span id="skipped-count">0</span> 個漢字被跳過
+                    </div>
+                    <div id="hint-info" class="hidden mt-1">
+                        <span id="hint-count">0</span> 個漢字使用了提示功能
+                    </div>
+                </div>
+                
+                <!-- 學生身份選擇區域 -->
+                <div class="student-identity-section mt-6 pt-6 border-t border-gray-200 dark:border-gray-700">
+                    <h3 class="text-lg font-medium mb-3">請選擇您的身份</h3>
+                    
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                        <!-- 班別選擇 -->
+                        <div>
+                            <label class="block text-sm font-medium mb-1 text-left">班別</label>
+                            <select id="student-class" class="w-full px-3 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-base">
+                                <option value="">請選擇班別</option>
+                                <option value="1A">1A</option>
+                                <option value="2A">2A</option>
+                                <option value="3A">3A</option>
+                                <option value="4A">4A</option>
+                                <option value="4B">4B</option>
+                                <option value="5A">5A</option>
+                                <option value="5B">5B</option>
+                                <option value="6A">6A</option>
+                                <option value="6B">6B</option>
+                                <option value="6C">6C</option>
+                            </select>
+                        </div>
+                        
+                        <!-- 學號輸入 -->
+                        <div>
+                            <label class="block text-sm font-medium mb-1 text-left">學號</label>
+                            <input type="number" id="student-id" class="w-full px-3 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg text-base" placeholder="請輸入學號">
+                        </div>
+                        
+                        <!-- 學生姓名顯示 -->
+                        <div>
+                            <label class="block text-sm font-medium mb-1 text-left">姓名</label>
+                            <div id="student-name-display" class="w-full px-3 py-2 bg-gray-100 dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg text-base min-h-[42px] flex items-center">
+                                <!-- 姓名會自動顯示在這裡 -->
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- 提交按鈕 -->
+                    <div class="mt-4">
+                        <button id="submit-data" class="bg-green-600 hover:bg-green-700 text-white font-bold py-2.5 px-8 rounded-lg transition-all duration-200 shadow-sm hover:shadow-md transform hover:-translate-y-0.5" disabled>
+                            提交資料
+                        </button>
+                        <!-- 提交狀態 -->
+                        <div id="submit-status" class="mt-3 text-sm hidden"></div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="flex flex-wrap gap-3 justify-center">
+                <button id="practice-again" class="bg-primary hover:bg-primary/90 text-white font-bold py-3 px-8 rounded-lg transition-all duration-200 shadow-sm hover:shadow transform hover:-translate-y-0.5">
+                    再練習一次
+                </button>
+                <button id="new-content" class="bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-8 rounded-lg transition-all duration-200 shadow-sm hover:shadow transform hover:-translate-y-0.5">
+                    輸入新內容
+                </button>
+            </div>
+        </div>
+        
+        <!-- 隱藏的iframe用於觸發權限檢查 -->
+
+    </div>
+
+    <script>
+        // 檢查暗色模式偏好
+        if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+            document.documentElement.classList.add('dark');
+        }
+        
+        window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', event => {
+            if (event.matches) {
+                document.documentElement.classList.add('dark');
+            } else {
+                document.documentElement.classList.remove('dark');
+            }
+        });
+        
+        // 直接設置權限為已授予，不需檢查
+        let permissionGranted = true;
+        
+        // 計分系統管理模組
+        const ScoreManager = {
+            // 分數組成部分
+            baseScore: 0,       // 基礎得分(最高600分)
+            timeScore: 0,       // 時間得分(最高200分)
+            skillScore: 0,      // 技巧得分(最高200分)
+            
+            // 扣分項目
+            penalties: {
+                skips: 0,           // 跳過扣分
+                showAnswers: 0,     // 顯示答案扣分
+                hintLevel1: 0,      // 一級提示扣分
+                hintLevel2: 0       // 二級提示扣分
+            },
+            
+            // 統計數據
+            stats: {
+                skipCount: 0,       // 跳過次數
+                showAnswerCount: 0, // 顯示答案次數
+                hintLevel1Count: 0, // 一級提示次數
+                hintLevel2Count: 0, // 二級提示次數
+                maxCombo: 0,        // 最高連擊數
+                errorCount: 0       // 錯誤次數
+            },
+            
+            // 分數歷史記錄(用於動畫)
+            scoreHistory: [],
+            
+            // 初始化計分系統
+            init() {
+                this.reset();
+                this.createScoreDisplay();
+            },
+            
+            // 重置所有分數
+            reset() {
+                this.baseScore = 0;
+                this.timeScore = 0;
+                this.skillScore = 0;
+                
+                this.penalties = {
+                    skips: 0,
+                    showAnswers: 0,
+                    hintLevel1: 0,
+                    hintLevel2: 0
+                };
+                
+                this.stats = {
+                    skipCount: 0,
+                    showAnswerCount: 0,
+                    hintLevel1Count: 0,
+                    hintLevel2Count: 0,
+                    maxCombo: 0,
+                    errorCount: 0
+                };
+                
+                this.scoreHistory = [];
+                this.updateScoreDisplay();
+            },
+            
+            // 計算當前總分
+            getTotalScore() {
+                const totalWithoutPenalties = this.baseScore + this.timeScore + this.skillScore;
+                const totalPenalties = this.penalties.skips + this.penalties.showAnswers + 
+                               this.penalties.hintLevel1 + this.penalties.hintLevel2;
+                
+                return Math.max(0, totalWithoutPenalties - totalPenalties);
+            },
+            
+            // 添加分數並顯示動畫
+            addScore(amount, category) {
+                let newAmount = amount;
+                switch(category) {
+                    case 'base':
+                        this.baseScore += amount;
+                        break;
+                    case 'time':
+                        this.timeScore += amount;
+                        break;
+                    case 'skill':
+                        this.skillScore += amount;
+                        break;
+                    default:
+                        // 通用添加(僅用於測試)
+                        break;
+                }
+                
+                // 記錄分數變化以顯示動畫
+                this.scoreHistory.push({amount: newAmount, timestamp: Date.now()});
+                
+                // 更新分數顯示
+                this.updateScoreDisplay();
+                this.animateScoreChange(newAmount);
+            },
+            
+            // 扣分操作
+            deductScore(type, count = 1) {
+                let amount = 0;
+                
+                switch(type) {
+                    case 'skip':
+                        this.stats.skipCount += count;
+                        // 跳過不再扣分，但仍記錄統計數據
+                        break;
+                        
+                    case 'showAnswer':
+                        this.stats.showAnswerCount += count;
+                        // 顯示答案不再扣分，但仍記錄統計數據
+                        break;
+                        
+                    case 'hintLevel1':
+                        this.stats.hintLevel1Count += count;
+                        amount = count * 20; // 每次第一步提示扣20分
+                        this.penalties.hintLevel1 += amount;
+                        break;
+                        
+                    case 'hintLevel2':
+                        this.stats.hintLevel2Count += count;
+                        amount = count * 40; // 每次第二步提示扣40分
+                        this.penalties.hintLevel2 += amount;
+                        break;
+                }
+                
+                // 記錄分數變化以顯示動畫
+                if (amount > 0) {
+                    this.scoreHistory.push({amount: -amount, timestamp: Date.now()});
+                    this.animateScoreChange(-amount);
+                }
+                
+                // 更新分數顯示
+                this.updateScoreDisplay();
+            },
+            
+            // 更新最高連擊數
+            updateMaxCombo(combo) {
+                this.stats.maxCombo = Math.max(this.stats.maxCombo, combo);
+            },
+            
+            // 增加錯誤計數
+            addError() {
+                this.stats.errorCount++;
+            },
+            
+            // 計算練習完成後的最終分數
+            calculateFinalScore(totalItems, completedItems, timeSpent, isArticleMode) {
+                // 1. 計算基礎得分 (最高700分)
+                const baseScore = Math.round((completedItems / totalItems) * 700);
+                this.baseScore = baseScore;
+                
+                // 2. 計算時間得分 (最高200分)
+                const maxTime = totalItems * 8; // 每字8秒的標準時間
+                const timeRatio = Math.min(1, timeSpent / maxTime);
+                const timeScore = Math.round(200 * Math.pow(1 - timeRatio, 2));
+                this.timeScore = Math.max(30, timeScore); // 最低30分
+                
+                // 3. 計算技巧得分 (最高100分)
+                // 連擊獎勵: 每1連擊加5分，無上限
+                const comboScore = Math.min(100, this.stats.maxCombo * 5);
+                
+                // 不再有文章模式加成
+                this.skillScore = comboScore;
+                
+                return this.getTotalScore();
+            },
+            
+            // 獲取成績等級
+            getGradeLevel(score) {
+                if (score >= 950) return { grade: "神級", message: "拼音大師！無人能敵！" };
+                if (score >= 870) return { grade: "超級", message: "太厲害了！接近完美！" };
+                if (score >= 770) return { grade: "優秀", message: "表現非常出色！" };
+                if (score >= 670) return { grade: "良好", message: "掌握得不錯！" };
+                if (score >= 600) return { grade: "及格", message: "繼續努力！" };
+                return { grade: "待加强", message: "再練習一下吧！" };
+            },
+            
+            // 創建分數顯示元素
+            createScoreDisplay() {
+                const scoreDisplay = document.createElement('div');
+                scoreDisplay.id = 'score-display';
+                scoreDisplay.className = 'fixed top-4 right-4 p-3 bg-white dark:bg-gray-800 rounded-lg shadow-lg z-50 transition-all duration-300 flex items-center';
+                scoreDisplay.innerHTML = `
+                    <div class="mr-2 text-primary dark:text-primary-light font-bold">分數：</div>
+                    <div id="current-score" class="text-2xl font-bold text-primary dark:text-primary-light">0</div>
+                    <div id="score-animation-container" class="absolute left-1/2 -translate-x-1/2 -top-8 w-full h-8 overflow-visible"></div>
+                `;
+                
+                // 先檢查是否已存在，避免重複添加
+                if (!document.getElementById('score-display')) {
+                    document.body.appendChild(scoreDisplay);
+                }
+                
+                // 初始隱藏
+                scoreDisplay.style.opacity = '0';
+                scoreDisplay.style.transform = 'translateY(-20px)';
+            },
+            
+            // 顯示分數顯示元素
+            showScoreDisplay() {
+                const scoreDisplay = document.getElementById('score-display');
+                if (scoreDisplay) {
+                    scoreDisplay.style.opacity = '1';
+                    scoreDisplay.style.transform = 'translateY(0)';
+                }
+            },
+            
+            // 隱藏分數顯示元素
+            hideScoreDisplay() {
+                const scoreDisplay = document.getElementById('score-display');
+                if (scoreDisplay) {
+                    scoreDisplay.style.opacity = '0';
+                    scoreDisplay.style.transform = 'translateY(-20px)';
+                }
+            },
+            
+            // 更新分數顯示
+            updateScoreDisplay() {
+                const scoreElement = document.getElementById('current-score');
+                if (scoreElement) {
+                    scoreElement.textContent = this.getTotalScore();
+                }
+            },
+            
+            // 分數變動動畫
+            animateScoreChange(amount) {
+                if (amount === 0) return;
+                
+                const container = document.getElementById('score-animation-container');
+                if (!container) return;
+                
+                const animation = document.createElement('div');
+                animation.className = 'absolute left-1/2 -translate-x-1/2 font-bold text-lg transition-all duration-500 opacity-0';
+                animation.textContent = amount > 0 ? `+${amount}` : `${amount}`;
+                animation.style.color = amount > 0 ? '#10B981' : '#EF4444';
+                animation.style.bottom = '0px';
+                
+                container.appendChild(animation);
+                
+                // 觸發動畫
+                setTimeout(() => {
+                    animation.style.opacity = '1';
+                    animation.style.bottom = '20px';
+                }, 10);
+                
+                // 移除動畫元素
+                setTimeout(() => {
+                    animation.style.opacity = '0';
+                    setTimeout(() => {
+                        container.removeChild(animation);
+                    }, 500);
+                }, 1000);
+            },
+            
+            // 生成詳細的分數報告HTML
+            generateScoreReport(totalItems, completedItems, timeSpent, isArticleMode) {
+                // 計算最終分數
+                const totalScore = this.calculateFinalScore(totalItems, completedItems, timeSpent, isArticleMode);
+                const grade = this.getGradeLevel(totalScore);
+                
+                // 格式化時間
+                const minutes = Math.floor(timeSpent / 60);
+                const seconds = Math.floor(timeSpent % 60);
+                const timeString = `${minutes}:${seconds < 10 ? '0' : ''}${seconds}`;
+                
+                // 平均速度
+                const avgSpeed = completedItems > 0 ? (timeSpent / completedItems).toFixed(1) : 0;
+                
+                // 計算各項詳細分數
+                const correctRate = totalItems > 0 ? Math.round((completedItems / totalItems) * 100) : 0;
+                const comboScore = Math.min(100, this.stats.maxCombo * 5); // 每連擊5分，最高100分
+                
+                // 總扣分
+                const totalPenalties = this.penalties.hintLevel1 + this.penalties.hintLevel2;
+                
+                return `
+                <div class="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-5 mb-6 score-report">
+                    <div class="flex items-center justify-between mb-4">
+                        <h3 class="text-xl font-bold text-gray-800 dark:text-gray-200">成績報告</h3>
+                        <div class="flex items-center">
+                            <div class="text-2xl font-bold ${grade.grade === "神級" ? 'text-purple-600 dark:text-purple-400' : 
+                                                           grade.grade === "超級" ? 'text-indigo-600 dark:text-indigo-400' :
+                                                           grade.grade === "優秀" ? 'text-green-600 dark:text-green-400' :
+                                                           grade.grade === "良好" ? 'text-blue-600 dark:text-blue-400' :
+                                                           grade.grade === "及格" ? 'text-yellow-600 dark:text-yellow-400' :
+                                                           'text-red-600 dark:text-red-400'}">${grade.grade}</div>
+                            <div class="ml-2 text-sm bg-gray-100 dark:bg-gray-700 rounded-full px-3 py-1">${grade.message}</div>
+                        </div>
+                    </div>
+                    
+                    <div class="text-3xl font-bold text-primary dark:text-primary-light mb-4">
+                        ${totalScore} <span class="text-sm text-gray-500 dark:text-gray-400 font-normal">/ 1000分</span>
+                    </div>
+                    
+                    <div class="space-y-4">
+                        <!-- 基礎得分 -->
+                        <div class="p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
+                            <div class="flex justify-between mb-2">
+                                <div class="font-semibold">基礎得分</div>
+                                <div class="font-bold">${this.baseScore} <span class="text-xs text-gray-500 dark:text-gray-400">/ 700</span></div>
+                            </div>
+                            <div class="grid grid-cols-2 gap-2 text-sm">
+                                <div class="flex justify-between">
+                                    <span>正確率:</span>
+                                    <span>${correctRate}%</span>
+                                </div>
+                                <div class="flex justify-between">
+                                    <span>實際完成:</span>
+                                    <span>${completedItems}/${totalItems}字</span>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- 時間得分 -->
+                        <div class="p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
+                            <div class="flex justify-between mb-2">
+                                <div class="font-semibold">時間得分</div>
+                                <div class="font-bold">${this.timeScore} <span class="text-xs text-gray-500 dark:text-gray-400">/ 200</span></div>
+                            </div>
+                            <div class="grid grid-cols-2 gap-2 text-sm">
+                                <div class="flex justify-between">
+                                    <span>用時:</span>
+                                    <span>${timeString}</span>
+                                </div>
+                                <div class="flex justify-between">
+                                    <span>平均速度:</span>
+                                    <span>${avgSpeed}秒/字</span>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- 技巧得分 -->
+                        <div class="p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
+                            <div class="flex justify-between mb-2">
+                                <div class="font-semibold">技巧得分</div>
+                                <div class="font-bold">${this.skillScore} <span class="text-xs text-gray-500 dark:text-gray-400">/ 100</span></div>
+                            </div>
+                            <div class="grid grid-cols-1 gap-2 text-sm">
+                                <div class="flex justify-between">
+                                    <span>最高連擊:</span>
+                                    <span>${this.stats.maxCombo} (${comboScore}分)</span>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- 扣分項目 -->
+                        ${totalPenalties > 0 ? `
+                        <div class="p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
+                            <div class="flex justify-between mb-2">
+                                <div class="font-semibold">扣分項目</div>
+                                <div class="font-bold text-red-600 dark:text-red-400">-${totalPenalties}分</div>
+                            </div>
+                            <div class="grid grid-cols-1 gap-2 text-sm">
+                                ${this.penalties.hintLevel1 > 0 ? `
+                                <div class="flex justify-between">
+                                    <span>提示聲母:</span>
+                                    <span>${this.stats.hintLevel1Count}次 (-${this.penalties.hintLevel1}分)</span>
+                                </div>` : ''}
+                                
+                                ${this.penalties.hintLevel2 > 0 ? `
+                                <div class="flex justify-between">
+                                    <span>提示聲母韻母:</span>
+                                    <span>${this.stats.hintLevel2Count}次 (-${this.penalties.hintLevel2}分)</span>
+                                </div>` : ''}
+                            </div>
+                        </div>` : ''}
+                    </div>
+                </div>`;
+            }
+        };
+        
+        // 核心模組: 資料管理
+        const DataManager = {
+            // 檢查是否已經成功加載 Pinyin Pro
+            isPinyinProLoaded: false,
+            
+            // 初始化
+            init() {
+                // 檢查 Pinyin Pro 是否可用
+                setTimeout(() => {
+                    this.checkPinyinProAvailability();
+                }, 500);
+            },
+            
+            // 將拼音分解為聲母、韻母和聲調
+            decomposePinyin(fullPinyin) {
+                if (!fullPinyin) return { initial: '', final: '', tone: 5, original: '' };
+                
+                // 預先提取原始帶調拼音，用於後續分析
+                const originalPinyin = fullPinyin;
+                
+                // 1. 聲調提取與基本拼音獲取
+                let tone = 0;
+                let basePinyin = '';
+                let markedVowel = '';
+                
+                // 檢測哪個元音帶有聲調
+                if (fullPinyin.match(/[āáǎà]/)) { markedVowel = 'a'; tone = this.getToneNumber(fullPinyin, 'a'); }
+                else if (fullPinyin.match(/[ēéěè]/)) { markedVowel = 'e'; tone = this.getToneNumber(fullPinyin, 'e'); }
+                else if (fullPinyin.match(/[īíǐì]/)) { markedVowel = 'i'; tone = this.getToneNumber(fullPinyin, 'i'); }
+                else if (fullPinyin.match(/[ōóǒò]/)) { markedVowel = 'o'; tone = this.getToneNumber(fullPinyin, 'o'); }
+                else if (fullPinyin.match(/[ūúǔù]/)) { markedVowel = 'u'; tone = this.getToneNumber(fullPinyin, 'u'); }
+                else if (fullPinyin.match(/[ǖǘǚǜ]/)) { markedVowel = 'ü'; tone = this.getToneNumber(fullPinyin, 'ü'); }
+                else tone = 5; // 輕聲
+                
+                // 移除所有聲調符號
+                basePinyin = fullPinyin
+                    .replace(/[āáǎà]/g, 'a')
+                    .replace(/[ēéěè]/g, 'e')
+                    .replace(/[īíǐì]/g, 'i')
+                    .replace(/[ōóǒò]/g, 'o')
+                    .replace(/[ūúǔù]/g, 'u')
+                    .replace(/[ǖǘǚǜ]/g, 'ü');
+                
+                // 2. 分離聲母和韻母
+                const initials = ['zh', 'ch', 'sh', 'b', 'p', 'm', 'f', 'd', 't', 'n', 'l', 'g', 'k', 'h', 'j', 'q', 'x', 'r', 'z', 'c', 's', 'y', 'w'];
+                
+                let initial = '';
+                let final = basePinyin;
+                
+                // 匹配聲母
+                for (let i of initials) {
+                    if (basePinyin.startsWith(i)) {
+                        initial = i;
+                        final = basePinyin.slice(i.length);
+                        break;
+                    }
+                }
+                
+                // 3. 特殊韻母處理與驗證
+                if ((final === 'iu' && markedVowel !== 'u') || 
+                    (final === 'ui' && markedVowel !== 'i')) {
+                    console.warn(`提醒：拼音「${originalPinyin}」的聲調標記可能不正確。
+                                在 'iu' 中應標在 'u' 上；在 'ui' 中應標在 'i' 上`);
+                }
+                
+                return {
+                    initial,   // 聲母
+                    final,     // 韻母
+                    tone,      // 聲調 (1-5)
+                    original: originalPinyin // 保存原始拼音
+                };
+            },
+            
+            // 輔助函數：根據帶聲調元音獲取聲調號碼
+            getToneNumber(pinyin, vowel) {
+                switch(vowel) {
+                    case 'a': return pinyin.includes('ā') ? 1 : pinyin.includes('á') ? 2 : pinyin.includes('ǎ') ? 3 : 4;
+                    case 'e': return pinyin.includes('ē') ? 1 : pinyin.includes('é') ? 2 : pinyin.includes('ě') ? 3 : 4;
+                    case 'i': return pinyin.includes('ī') ? 1 : pinyin.includes('í') ? 2 : pinyin.includes('ǐ') ? 3 : 4;
+                    case 'o': return pinyin.includes('ō') ? 1 : pinyin.includes('ó') ? 2 : pinyin.includes('ǒ') ? 3 : 4;
+                    case 'u': return pinyin.includes('ū') ? 1 : pinyin.includes('ú') ? 2 : pinyin.includes('ǔ') ? 3 : 4;
+                    case 'ü': return pinyin.includes('ǖ') ? 1 : pinyin.includes('ǘ') ? 2 : pinyin.includes('ǚ') ? 3 : 4;
+                    default: return 5;
+                }
+            },
+            
+            // 檢查 Pinyin Pro 可用性
+            checkPinyinProAvailability() {
+                const startButton = document.getElementById('start-practice');
+                
+                try {
+                    if (typeof pinyinPro !== 'undefined' && pinyinPro.pinyin) {
+                        // 測試 Pinyin Pro 功能
+                        const testResult = pinyinPro.pinyin('測試');
+                        if (testResult) {
+                            this.isPinyinProLoaded = true;
+                            
+                            // 如果權限已授予，啟用開始按鈕
+                            if (permissionGranted) {
+                                startButton.disabled = false;
+                            }
+                            console.log('Pinyin Pro 拼音引擎已加載成功');
+                            return;
+                        }
+                    }
+                    
+                    // 如果執行到這裡，說明加載失敗或功能不可用
+                    throw new Error('Pinyin Pro 功能測試失敗');
+                    
+                } catch (error) {
+                    console.error('Pinyin Pro 加載失敗', error);
+                    
+                    // 嘗試自動重新加載
+                    console.log('將在3秒後嘗試重新加載');
+                    setTimeout(() => {
+                        this.checkPinyinProAvailability();
+                    }, 3000);
+                    
+                    // 保持開始按鈕禁用
+                    startButton.disabled = true;
+                }
+            },
+            
+            // 解析輸入的詞彙
+            parseVocabulary(text) {
+                if (!text || !text.trim()) return [];
+                
+                // 處理每行一個詞彙或由逗號分隔的詞彙
+                const words = text.split(/[\n,，、]+/).map(word => word.trim()).filter(word => word);
+                
+                // 轉換為內部數據格式
+                return words.map(word => {
+                    const characters = Array.from(word); // 將詞彙拆分為單個字符
+                    return {
+                        word,
+                        characters,
+                        pinyins: Array(characters.length).fill(''), // 初始化拼音數組
+                        skipped: false // 新增跳過標記
+                    };
+                });
+            },
+            
+            // 解析輸入的文章
+            parseArticle(text) {
+                if (!text || !text.trim()) return null;
+                
+                const content = text.trim();
+                const characters = Array.from(content);
+                
+                return {
+                    content,
+                    characters,
+                    pinyins: Array(characters.length).fill(''), // 初始化拼音數組
+                    skippedChars: {} // 用於記錄被跳過的字符的索引
+                };
+            },
+            
+            // 使用 Pinyin Pro 獲取字符的標準拼音
+            getStandardPinyin(character, requireTones = true) {
+                if (!this.isPinyinProLoaded || !character) {
+                    console.warn('Pinyin Pro 未加載或字符為空');
+                    return null;
+                }
+                
+                try {
+                    // 設置拼音選項
+                    const options = {
+                        type: 'array',
+                        toneType: requireTones ? 'symbol' : 'none',
+                        nonZh: 'removed'  // 忽略非漢字
+                    };
+                    
+                    // 獲取拼音
+                    const pinyinArray = pinyinPro.pinyin(character, options);
+                    
+                    // 返回第一個拼音 (對於多音字，取第一個)
+                    return pinyinArray && pinyinArray.length > 0 ? pinyinArray[0] : null;
+                } catch (error) {
+                    console.error(`獲取「${character}」的拼音時出錯:`, error);
+                    return null;
+                }
+            },
+            
+            // 檢查漢字的拼音是否正確
+            checkPinyin(character, userInput, requireTones = true) {
+                if (!this.isPinyinProLoaded) {
+                    console.warn('Pinyin Pro 未加載，無法檢查拼音');
+                    return true; // 如果拼音庫未加載，默認接受用戶輸入
+                }
+                
+                if (!character || !userInput) return false;
+                
+                try {
+                    // 獲取標準拼音
+                    const standardPinyin = this.getStandardPinyin(character, requireTones);
+                    
+                    // 如果無法獲取標準拼音，接受任何輸入
+                    if (!standardPinyin) {
+                        console.log(`未找到「${character}」的拼音數據，接受用戶輸入`);
+                        return true;
+                    }
+                    
+                    // 如果不需要聲調，去除聲調後比較
+                    if (!requireTones) {
+                        return this.removeTones(userInput.toLowerCase()) === this.removeTones(standardPinyin.toLowerCase());
+                    }
+                    
+                    // 需要聲調時，直接比較
+                    return userInput.toLowerCase() === standardPinyin.toLowerCase();
+                    
+                } catch (error) {
+                    console.error(`檢查「${character}」拼音時出錯:`, error);
+                    return true; // 出錯時接受用戶輸入
+                }
+            },
+            
+            // 移除拼音中的聲調
+            removeTones(pinyin) {
+                return pinyin
+                    .replace(/[āáǎà]/g, 'a')
+                    .replace(/[ēéěè]/g, 'e')
+                    .replace(/[īíǐì]/g, 'i')
+                    .replace(/[ōóǒò]/g, 'o')
+                    .replace(/[ūúǔù]/g, 'u')
+                    .replace(/[ǖǘǚǜ]/g, 'ü');
+            },
+            
+            // 處理數字聲調輸入
+            processToneNumber(input) {
+                // 檢查輸入是否以數字1-5結尾
+                const match = input.match(/^([a-z]+)([1-5])$/i);
+                
+                if (match) {
+                    const basePinyin = match[1].toLowerCase();
+                    const toneNumber = parseInt(match[2]);
+                    
+                    // 數字到聲調符號的映射
+                    const toneSymbols = ['¯', 'ˊ', 'ˇ', 'ˋ', '．']; // 1-5對應的聲調符號
+                    
+                    // 使用現有函數添加聲調
+                    return {
+                        value: this.addToneSymbol(basePinyin, toneSymbols[toneNumber - 1]),
+                        valid: true,
+                        hasToneNumber: true
+                    };
+                }
+                
+                // 檢查是否有無效數字(0,6-9)
+                const invalidMatch = input.match(/^([a-z]+)([0,6-9])$/i);
+                if (invalidMatch) {
+                    return {
+                        value: input,
+                        valid: false,
+                        message: "聲調數字應為1-5",
+                        hasToneNumber: true
+                    };
+                }
+                
+                // 不包含數字聲調
+                return { 
+                    value: input, 
+                    valid: true,
+                    hasToneNumber: false
+                };
+            },
+            
+            // 添加聲調到拼音 - 修改後的函數
+            addToneSymbol(pinyin, toneSymbol) {
+                if (!pinyin || !pinyin.trim()) return pinyin;
+                
+                // 先移除已有的聲調符號
+                const basePinyin = this.removeTones(pinyin);
+                
+                // 輕聲不添加符號
+                if (toneSymbol === '．') {
+                    return basePinyin;
+                }
+                
+                // 確定聲調數字 (1-4)
+                let toneNumber;
+                switch (toneSymbol) {
+                    case '¯': toneNumber = 0; break; // 第一聲 (索引 0)
+                    case 'ˊ': toneNumber = 1; break; // 第二聲 (索引 1)
+                    case 'ˇ': toneNumber = 2; break; // 第三聲 (索引 2)
+                    case 'ˋ': toneNumber = 3; break; // 第四聲 (索引 3)
+                    default: return basePinyin;      // 未知聲調符號
+                }
+                
+                // 元音優先級映射表
+                const vowelPriority = ['a', 'o', 'e', 'i', 'u', 'v'];
+                const vowelWithTones = [
+                    ['ā', 'á', 'ǎ', 'à'], // a的四個聲調
+                    ['ō', 'ó', 'ǒ', 'ò'], // o的四個聲調
+                    ['ē', 'é', 'ě', 'è'], // e的四個聲調
+                    ['ī', 'í', 'ǐ', 'ì'], // i的四個聲調
+                    ['ū', 'ú', 'ǔ', 'ù'], // u的四個聲調
+                    ['ǖ', 'ǘ', 'ǚ', 'ǜ']  // ü的四個聲調
+                ];
+                
+                // 複合元音處理規則
+                const compoundVowels = {
+                    'ai': 0, 'ei': 0,            // 標在第一個元音 'a', 'e'
+                    'ao': 0, 'ou': 0,            // 標在第一個元音 'a', 'o'
+                    'iu': 1, 'ie': 1, 'üe': 1, 'ui': 1    // 標在第二個元音 'u', 'e', 'e', 'i'
+                };
+                
+                // 處理特殊情況: 如 ü 可能被表示為 v 或 u:
+                let processedPinyin = basePinyin.replace(/u:/g, 'v').replace(/ü/g, 'v');
+                
+                // 檢查是否為複合元音
+                for (const [compound, targetIndex] of Object.entries(compoundVowels)) {
+                    const compoundIndex = processedPinyin.indexOf(compound);
+                    if (compoundIndex !== -1) {
+                        // 找到複合元音，標在指定位置
+                        const vowelToMark = compound[targetIndex];
+                        const vowelIndex = vowelPriority.indexOf(vowelToMark);
+                        if (vowelIndex !== -1) {
+                            const tonedVowel = vowelWithTones[vowelIndex][toneNumber];
+                            const result = processedPinyin.substring(0, compoundIndex + targetIndex) + 
+                                   tonedVowel + 
+                                   processedPinyin.substring(compoundIndex + targetIndex + 1);
+                            
+                            // 還原 v 到 ü (如果有)
+                            return result.replace(/v/g, 'ü');
+                        }
+                    }
+                }
+                
+                // 如果不是複合元音，按優先級找元音
+                for (let i = 0; i < vowelPriority.length; i++) {
+                    const vowel = vowelPriority[i];
+                    const vowelIndex = processedPinyin.indexOf(vowel);
+                    
+                    if (vowelIndex !== -1) {
+                        // 找到元音，替換為帶聲調的版本
+                        const tonedVowel = vowelWithTones[i][toneNumber];
+                        const result = processedPinyin.substring(0, vowelIndex) + 
+                               tonedVowel + 
+                               processedPinyin.substring(vowelIndex + 1);
+                        
+                        // 還原 v 到 ü (如果有)
+                        return result.replace(/v/g, 'ü');
+                    }
+                }
+                
+                // 找不到元音，返回原拼音
+                return basePinyin;
+            },
+            
+            // 檢查是否為漢字
+            isChineseCharacter(char) {
+                return /[\u4e00-\u9fa5]/.test(char);
+            },
+            
+            // 學生數據查找功能
+            findStudentName(className, studentId) {
+                // 完整的學生數據庫
+                const studentDatabase = {
+                    '1A': {
+                        '1': '陳雲凡', '2': '鄧祈峰', '3': '付哲銘', '4': '林嘉欣', '5': 'AMANDA',
+                        '6': 'MEHRAB', '7': 'OLIVIA', '8': '施優秀', '9': '王筱涵', '10': '俞家豪',
+                        '11': '樊奕辰', '12': '張子涵', '13': '李倪森', '14': '勞振謙', '15': '鄭溢銘',
+                        '16': '王泓權', '17': '吳竣杰'
+                    },
+                    '2A': {
+                        '1': '陳澤涵', '2': 'CHLOE', '3': 'KEEFE', '4': '洪榆林', '5': '柯瑾蓉',
+                        '6': '林子揚', '7': '李凱晴', '8': '李凱嵐', '9': '李晉博', '10': '劉世燦',
+                        '11': '邵海棠', '12': 'AARIAN', '13': 'MRIJU', '14': '唐詩晴', '15': '曾俊燁',
+                        '16': '王佩琳', '17': '王梓淇', '18': '胡苡娜', '19': '楊澤霖', '20': '楊君彥',
+                        '21': '余瑞霖', '22': 'ZAYAN', '23': '李詩倪', '24': '陳玥辰', '25': '譚祉睿'
+                    },
+                    '3A': {
+                        '1': 'CARLO', '2': 'KEIRA', '3': '陳熙媛', '4': '鄒焯霖', '5': '鄭仲恩',
+                        '6': '鄭仲軒', '7': 'SEBASTIAN', '8': 'ZOE', '9': '方柏喬', '10': '方佩芸',
+                        '11': '劉竣柏', '12': '李曉亮', '13': 'ZOYA', '14': '沛欣', '15': '黃軒譽',
+                        '16': '黃俊皓', '17': '吳梓曦', '18': '邱振航', '19': '楊鎧霖', '20': '葉孝莉',
+                        '21': '張國鋒', '22': '李浩言', '23': '張堡鈞'
+                    },
+                    '4A': {
+                        '1': '歐芷睿', '2': '蔡梓晴', '3': 'CERAH', '4': '陳樂兒', '5': '陳芮綺',
+                        '6': '戴佩珊', '7': 'DON', '8': '高滿', '9': '許琮鑫', '10': '王君樂彥',
+                        '11': '林宇晟', '12': '盧穎欣', '13': 'JADEN', '14': 'SAROSH', '15': '施家儀',
+                        '16': '施優雅', '17': '王筱淇', '18': '葉邇高', '19': 'ZIANA', '20': 'PAIGE',
+                        '21': '張予涵', '22': '羅家良', '23': '李沐宸', '24': '董宸悅'
+                    },
+                    '4B': {
+                        '1': '卞俊壹', '2': '蔡梓鑫', '3': '陳坷凡', '4': '陳絲悅', '5': '鄒焯恆',
+                        '6': '高鼎盛', '7': '許恒銘', '8': 'Adryll', '9': '李奕謙', '10': '邵海悅',
+                        '11': '施巧雯', '12': '曾子陽', '13': '韋詠蕎', '14': '王梓賢', '15': '王啟航',
+                        '16': '吳鎂汐', '17': '翁鈺涵', '18': '鄭奕鍚', '19': '王韾艾', '20': '胡銳華',
+                        '21': '王鏡宇', '22': '施愷煜', '23': '張南鈺'
+                    },
+                    '5A': {
+                        '1': '蔡榮軒', '2': '陳文璽', '3': '張君城', '4': '周雪喬', '5': '韓蔡育',
+                        '6': '柯瑾瑄', '7': 'BIBI', '8': 'DIKSHITA', '9': '賴曉琦', '10': '林羽萱',
+                        '11': '馬卓熙', '12': 'JACOB', '13': '佘浩銘', '14': '施筱淇', '15': '施鈞燁',
+                        '16': '施振雄', '17': '王嘉欣', '18': '王聖淵', '19': '黃俊豪', '20': '吳琦淮',
+                        '21': '吳雅恩', '22': '許佳琳', '23': 'GRACE', '24': '羅星宇'
+                    },
+                    '5B': {
+                        '1': '陳樂晴', '2': '陳叶信', '3': '莊家豪', '4': '鍾祉瑩', '5': '龍悅明',
+                        '6': '黃菲菲', '7': '葉睿庭', '8': '姚舒雅', '9': '李柏煒', '10': '李偉豪',
+                        '11': '李亦善', '12': '吳鎮賢', '13': '吳議樂', '14': '柯琬婷', '15': '曾駿熙',
+                        '16': '翁銘鑫', '17': '王鑫達', '18': '吳東翰', '19': '顏榮駿', '20': '林靖彌',
+                        '21': '宋研碩'
+                    },
+                    '6A': {
+                        '1': 'ANGELYTA', '2': 'BRYAN', '3': 'ANGELO', '4': 'MACE', '5': '柯首埠',
+                        '6': 'KATE', '7': '馬澤瑞', '8': 'EZEKIEL', '9': 'CHINO', '10': '李加恩',
+                        '11': 'JANELLA', '12': '謝嘉莉', '13': 'GAIL', '14': '黃樂恆', '15': '楊映川',
+                        '16': 'ZAYNAH'
+                    },
+                    '6B': {
+                        '1': '陳瑋謙', '2': '丁垵楠', '3': '黃晙昇', '4': '葉家睿', '5': '紀俊州',
+                        '6': '劉嘉瑩', '7': '李玺琳', '8': '李丞烜', '9': '劉欣然', '10': '呂璟峰',
+                        '11': '吳功衍', '12': '邵海茵', '13': '史天哲', '14': '施瑋峰', '15': '譚子晞',
+                        '16': '黃志希', '17': '黃朗庭', '18': '俞鳳英', '19': '詹志揚'
+                    },
+                    '6C': {
+                        '1': '蔡情芹', '2': '蔡鑫圳', '3': '陳銳華', '4': '鄭思朗', '5': '張博賢',
+                        '6': '韓琬婷', '7': '何天美', '8': '許柏譽', '9': '梁銘晞', '10': '林逸安',
+                        '11': '劉世錦', '12': '吳柏忻', '13': '施澔勳', '14': '施瀚堯', '15': '黃俊霆',
+                        '16': '叶漫桐', '17': '翁子喬', '18': '曾志識', '19': '張凡力'
+                    }
+                };
+                
+                // 檢查班級是否存在
+                if (studentDatabase[className]) {
+                    // 檢查學號是否存在
+                    if (studentDatabase[className][studentId]) {
+                        return studentDatabase[className][studentId].trim(); // 移除可能的空格
+                    }
+                }
+                
+                // 如果找不到學生，返回 null
+                return null;
+            }
+        };
+        
+        // 核心模組: UI管理
+        const UIManager = {
+            // 畫面元素
+            screens: {
+                input: document.getElementById('input-screen'),
+                practice: document.getElementById('practice-screen'),
+                completion: document.getElementById('completion-screen')
+            },
+            
+            // 錯誤提示處理函數
+            showErrorTip(input, message) {
+                // 創建或獲取提示元素
+                let tip = input.parentNode.querySelector('.error-tip');
+                if (!tip) {
+                    tip = document.createElement('div');
+                    tip.className = 'error-tip';
+                    input.parentNode.appendChild(tip);
+                }
+                tip.textContent = message;
+                tip.style.display = 'block';
+            },
+            
+            hideErrorTip(input) {
+                const tip = input.parentNode.querySelector('.error-tip');
+                if (tip) {
+                    tip.style.display = 'none';
+                }
+            },
+            
+            inputs: {
+                vocabularyText: document.getElementById('vocabulary-text'),
+                articleText: document.getElementById('article-text'),
+                requireTones: document.getElementById('require-tones')
+            },
+            
+            practiceViews: {
+                vocabulary: document.getElementById('vocabulary-practice'),
+                article: document.getElementById('article-practice'),
+                wordDisplay: document.getElementById('word-display'),
+                pinyinInputs: document.getElementById('pinyin-inputs'),
+                articleDisplay: document.getElementById('article-display'),
+                progressText: document.getElementById('progress-text'),
+                progressBar: document.getElementById('progress-bar'),
+                progressIcon: document.getElementById('progress-icon'),
+                modeIndicator: document.getElementById('mode-indicator'),
+                nextButton: document.getElementById('next-word'),
+                skipButton: document.getElementById('skip-item'),
+                feedbackMessage: document.getElementById('feedback-message')
+            },
+            
+            completionElements: {
+                message: document.getElementById('completion-message'),
+                totalCount: document.getElementById('total-count'),
+                timeSpent: document.getElementById('time-spent'),
+                skippedInfo: document.getElementById('skipped-info'),
+                skippedCount: document.getElementById('skipped-count')
+            },
+            
+            // 聲調符號和名稱
+            toneSymbols: [
+                { symbol: '¯', name: '一聲' },
+                { symbol: 'ˊ', name: '二聲' },
+                { symbol: 'ˇ', name: '三聲' },
+                { symbol: 'ˋ', name: '四聲' },
+                { symbol: '．', name: '輕聲' }
+            ],
+            
+            // 切換到指定畫面
+            showScreen(screenName) {
+                Object.keys(this.screens).forEach(key => {
+                    this.screens[key].classList.add('hidden');
+                });
+                
+                this.screens[screenName].classList.remove('hidden');
+            },
+            
+            // 切換練習模式視圖
+            setPracticeMode(mode) {
+                if (mode === 'vocabulary') {
+                    this.practiceViews.vocabulary.classList.remove('hidden');
+                    this.practiceViews.article.classList.add('hidden');
+                    this.practiceViews.modeIndicator.textContent = '詞彙模式';
+                } else {
+                    this.practiceViews.vocabulary.classList.add('hidden');
+                    this.practiceViews.article.classList.remove('hidden');
+                    this.practiceViews.modeIndicator.textContent = '文章模式';
+                }
+            },
+            
+            // 顯示詞彙練習 - 使用與文章相同的UI風格
+            showVocabularyPractice(wordData) {
+                // 顯示當前詞彙
+                this.practiceViews.wordDisplay.textContent = wordData.word;
+                
+                // 清空並創建拼音輸入框
+                this.practiceViews.pinyinInputs.innerHTML = '';
+                
+                // 追踪第一個漢字的容器引用
+                let firstCharContainer = null;
+                
+                const wordIndex = GameLogic.currentWordIndex; // 記錄當前詞彙索引
+                
+                wordData.characters.forEach((char, index) => {
+                    if (!DataManager.isChineseCharacter(char)) return; // 跳過非漢字
+                    
+                    // 創建字符容器
+                    const charContainer = document.createElement('div');
+                    charContainer.className = 'char-container';
+                    
+                    // 添加詞彙索引和字符索引屬性，用於跳過邏輯
+                    charContainer.dataset.wordIndex = wordIndex;
+                    charContainer.dataset.charIndex = index;
+                    
+                    // 如果這是第一個漢字，保存引用
+                    if (firstCharContainer === null) {
+                        firstCharContainer = charContainer;
+                    }
+                    
+                    // 創建漢字顯示
+                    const charDisplay = document.createElement('div');
+                    charDisplay.className = 'char-display';
+                    charDisplay.textContent = char;
+                    
+                    // 創建輸入容器
+                    const inputContainer = document.createElement('div');
+                    inputContainer.className = 'vocab-input-container';
+                    
+                    // 創建聲調選擇器 - 先添加聲調選擇器再添加輸入框
+                    if (GameLogic.requireTones) {
+                        const toneSelector = document.createElement('div');
+                        toneSelector.className = 'tone-selector relative';
+                        
+                        // 添加聲調按鈕
+                        this.toneSymbols.forEach((tone) => {
+                            const toneBtn = document.createElement('button');
+                            toneBtn.textContent = tone.symbol;
+                            toneBtn.title = tone.name;
+                            toneBtn.dataset.tone = tone.symbol;
+                            toneBtn.addEventListener('click', () => {
+                                const input = inputContainer.querySelector('.pinyin-input');
+                                if (input) {
+                                    const basePinyin = input.value;
+                                    if (basePinyin.trim()) {
+                                        input.value = DataManager.addToneSymbol(basePinyin, tone.symbol);
+                                        
+                                        // 檢查輸入是否正確
+                                        this.checkVocabularyInput(input);
+                                    }
+                                }
+                            });
+                            toneSelector.appendChild(toneBtn);
+                        });
+                        
+                        // 添加聲調說明
+                        const toneLabel = document.createElement('div');
+                        toneLabel.className = 'tone-label';
+                        toneLabel.textContent = '聲調';
+                        toneSelector.appendChild(toneLabel);
+                        
+                        // 先添加聲調選擇器
+                        inputContainer.appendChild(toneSelector);
+                    }
+                    
+                    // 創建輸入框
+                    const input = document.createElement('input');
+                    input.type = 'text';
+                    input.className = 'pinyin-input';
+                    input.dataset.index = index;
+                    input.dataset.char = char;
+                    input.placeholder = '拼音';
+                    
+                    // 添加輸入事件
+                    input.addEventListener('input', () => {
+                        // 移除之前的狀態
+                        input.classList.remove('correct', 'incorrect', 'checking', 'invalid-tone');
+                        this.hideErrorTip(input);
+                        
+                        const value = input.value.trim();
+                        
+                        if (value) {
+                            // 檢查是否為數字聲調格式
+                            const result = DataManager.processToneNumber(value);
+                            
+                            if (result.hasToneNumber === false) {
+                                // 普通輸入，不含數字聲調
+                                if (!GameLogic.requireTones) {
+                                    this.checkVocabularyInput(input);
+                                }
+                            } else if (result.valid) {
+                                // 有效的數字聲調，轉換為帶聲調拼音
+                                input.value = result.value;
+                                this.checkVocabularyInput(input);
+                            } else {
+                                // 無效的數字聲調
+                                input.classList.add('invalid-tone');
+                                this.showErrorTip(input, result.message);
+                            }
+                        }
+                    });
+                    
+                    // 然後添加輸入框
+                    inputContainer.appendChild(input);
+                    
+                    // 點擊字符顯示輸入框
+                    charDisplay.addEventListener('click', () => {
+                        // 移除其他字符的激活狀態
+                        document.querySelectorAll('.char-container').forEach(container => {
+                            container.classList.remove('active-char');
+                        });
+                        
+                        // 設置當前字符為激活狀態
+                        charContainer.classList.add('active-char');
+                        
+                        // 聚焦輸入框
+                        setTimeout(() => {
+                            input.focus();
+                        }, 100);
+                    });
+                    
+                    // 組合元素
+                    charContainer.appendChild(charDisplay);
+                    charContainer.appendChild(inputContainer);
+                    
+                    this.practiceViews.pinyinInputs.appendChild(charContainer);
+                });
+                
+                // 隱藏下一步按鈕，直到全部答對或跳過
+                this.practiceViews.nextButton.classList.add('hidden');
+                
+                // 直接修改CSS，使得所有char-container都顯示輸入框，無需點擊
+                const cssOverride = document.createElement('style');
+                cssOverride.textContent = `
+                    /* 重要：強制所有詞彙的輸入框都顯示，無需點擊激活 */
+                    .char-container .vocab-input-container {
+                        opacity: 1 !important;
+                        pointer-events: auto !important;
+                    }
+                `;
+                document.head.appendChild(cssOverride);
+                
+                // 聚焦在第一個輸入框
+                if (firstCharContainer) {
+                    // 為了視覺反饋，仍然給第一個字添加active-char類
+                    firstCharContainer.classList.add('active-char');
+                    
+                    // 聚焦第一個輸入框
+                    const input = firstCharContainer.querySelector('.pinyin-input');
+                    if (input) {
+                        setTimeout(() => {
+                            try {
+                                input.focus();
+                                console.log('已聚焦在第一個輸入框');
+                            } catch (e) {
+                                console.error('聚焦輸入框時出錯:', e);
+                            }
+                        }, 100);
+                    }
+                }
+            },
+            
+            // 顯示文章練習
+            showArticlePractice(articleData) {
+                // 清空文章顯示
+                this.practiceViews.articleDisplay.innerHTML = '';
+                
+                // 為每個字符創建元素
+                articleData.characters.forEach((char, index) => {
+                    const charSpan = document.createElement('span');
+                    charSpan.className = 'article-char';
+                    charSpan.textContent = char;
+                    charSpan.dataset.index = index;
+                    
+                    // 對於漢字，添加輸入容器
+                    if (DataManager.isChineseCharacter(char)) {
+                        // 創建輸入容器
+                        const inputContainer = document.createElement('div');
+                        inputContainer.className = 'article-input-container';
+                        
+                        // 創建聲調選擇器 - 先添加聲調選擇器
+                        if (GameLogic.requireTones) {
+                            const toneSelector = document.createElement('div');
+                            toneSelector.className = 'tone-selector relative';
+                            
+                            // 添加聲調按鈕
+                            this.toneSymbols.forEach((tone) => {
+                                const toneBtn = document.createElement('button');
+                                toneBtn.textContent = tone.symbol;
+                                toneBtn.title = tone.name;
+                                toneBtn.dataset.tone = tone.symbol;
+                                toneBtn.addEventListener('click', () => {
+                                    const input = inputContainer.querySelector('.pinyin-input');
+                                    if (input) {
+                                        const basePinyin = input.value;
+                                        if (basePinyin.trim()) {
+                                            input.value = DataManager.addToneSymbol(basePinyin, tone.symbol);
+                                            
+                                            // 檢查輸入是否正確
+                                            this.checkArticleInput(input);
+                                        }
+                                    }
+                                });
+                                toneSelector.appendChild(toneBtn);
+                            });
+                            
+                            // 添加聲調說明
+                            const toneLabel = document.createElement('div');
+                            toneLabel.className = 'tone-label';
+                            toneLabel.textContent = '聲調';
+                            toneSelector.appendChild(toneLabel);
+                            
+                            // 先添加聲調選擇器
+                            inputContainer.appendChild(toneSelector);
+                        }
+                        
+                        // 創建輸入框
+                        const input = document.createElement('input');
+                        input.type = 'text';
+                        input.className = 'pinyin-input';
+                        input.dataset.index = index;
+                        input.dataset.char = char;
+                        input.placeholder = '拼音';
+                        
+                        // 輸入框事件
+                        input.addEventListener('input', () => {
+                            // 移除之前的狀態
+                            input.classList.remove('correct', 'incorrect', 'checking', 'invalid-tone');
+                            charSpan.classList.remove('completed');
+                            this.hideErrorTip(input);
+                            
+                            const value = input.value.trim();
+                            
+                            if (value) {
+                                // 檢查是否為數字聲調格式
+                                const result = DataManager.processToneNumber(value);
+                                
+                                if (result.hasToneNumber === false) {
+                                    // 普通輸入，不含數字聲調
+                                    if (!GameLogic.requireTones) {
+                                        this.checkArticleInput(input);
+                                    }
+                                } else if (result.valid) {
+                                    // 有效的數字聲調，轉換為帶聲調拼音
+                                    input.value = result.value;
+                                    this.checkArticleInput(input);
+                                } else {
+                                    // 無效的數字聲調
+                                    input.classList.add('invalid-tone');
+                                    this.showErrorTip(input, result.message);
+                                    charSpan.classList.remove('completed');
+                                }
+                            }
+                        });
+                        
+                        // 然後添加輸入框
+                        inputContainer.appendChild(input);
+                        
+                        // 添加輸入容器到字符
+                        charSpan.appendChild(inputContainer);
+                        
+                        // 點擊漢字時激活輸入
+                        charSpan.addEventListener('click', () => {
+                            // 取消其他漢字的激活狀態
+                            document.querySelectorAll('.article-char.current').forEach(el => {
+                                if (el !== charSpan) {
+                                    el.classList.remove('current');
+                                }
+                            });
+                            
+                            // 設置當前漢字為激活狀態
+                            charSpan.classList.add('current');
+                            
+                            // 聚焦輸入框
+                            setTimeout(() => {
+                                input.focus();
+                            }, 100);
+                        });
+                    }
+                    
+                    this.practiceViews.articleDisplay.appendChild(charSpan);
+                });
+            },
+            
+            // 檢查詞彙輸入是否正確
+            checkVocabularyInput(input) {
+                const index = parseInt(input.dataset.index);
+                const char = input.dataset.char;
+                const userInput = input.value.trim();
+                
+                if (!userInput) return; // 如果輸入為空，不做處理
+                
+                // 獲取或初始化錯誤計數
+                const charContainer = input.closest('.char-container');
+                if (!charContainer.dataset.errorCount) {
+                    charContainer.dataset.errorCount = '0';
+                }
+                
+                // 檢查拼音
+                const isCorrect = DataManager.checkPinyin(char, userInput, GameLogic.requireTones);
+                
+                if (isCorrect) {
+                    input.classList.add("correct");
+                    input.classList.remove("incorrect");
+                    
+                    // 更新拼音數據
+                    GameLogic.currentWord.pinyins[index] = userInput;
+                    
+                    // 標記字符容器為完成
+                    if (charContainer) {
+                        charContainer.classList.add('completed');
+                        
+                        // 添加正確反饋動畫
+                        this.showCorrectFeedback(charContainer);
+                        
+                        // 播放正確音效
+                        SoundManager.playCorrectSound();
+                        
+                        // 增加連擊數
+                        ComboManager.increment();
+                        
+                        // 增加基礎得分 (每字的基礎得分取決於總漢字數)
+                        // 計算詞彙模式中所有漢字數
+                        const totalChars = GameLogic.calculateTotalChineseChars();
+                        if (totalChars > 0) {
+                            const pointsPerChar = 700 / totalChars; // 基礎分700分平均分配
+                            ScoreManager.addScore(Math.round(pointsPerChar), 'base');
+                        }
+                        
+                        // 重置錯誤計數
+                        charContainer.dataset.errorCount = '0';
+                        
+                        // 更新進度 - 在每次正確輸入後更新進度條
+                        this.updateProgress();
+                        
+                        // 連續輸入模式 - 自動跳到下一個字符
+                        if (GameLogic.continuousMode) {
+                            // 獲取所有字符容器
+                            const allChars = Array.from(document.querySelectorAll('.char-container'));
+                            const currentIndex = allChars.indexOf(charContainer);
+                            
+                            // 找到下一個未完成的字符
+                            const nextChar = this.findNextIncompleteChar(currentIndex, allChars);
+                            
+                            if (nextChar) {
+                                // 短暫延遲後跳轉，讓用戶看到當前輸入的反饋
+                                setTimeout(() => {
+                                    nextChar.querySelector('.char-display').click();
+                                }, 300);
+                            }
+                        }
+                    }
+                    
+                    // 檢查是否所有輸入都正確
+                    this.checkAllVocabularyInputs();
+                } else {
+                    // 增加錯誤計數
+                    let errorCount = parseInt(charContainer.dataset.errorCount) || 0;
+                    errorCount++;
+                    charContainer.dataset.errorCount = errorCount.toString();
+                    
+                    // 獲取字符的標準拼音以進行分解
+                    const standardPinyin = DataManager.getStandardPinyin(char, GameLogic.requireTones);
+                    if (standardPinyin) {
+                        const pinyinParts = DataManager.decomposePinyin(standardPinyin);
+                        
+                        if (errorCount === 1) {
+                            // 第一次錯誤：顯示聲母提示
+                            input.classList.add("incorrect");
+                            input.classList.remove("correct");
+                            
+                            // 添加錯誤震動反饋
+                            this.showIncorrectFeedback(charContainer);
+                            
+                            // 播放錯誤音效
+                            SoundManager.playIncorrectSound();
+                            
+                            // 等待一小段時間後提供聲母提示
+                            setTimeout(() => {
+                                // 提供聲母提示並設置為不可刪除
+                                input.value = pinyinParts.initial;
+                                input.dataset.hint = pinyinParts.initial; // 存儲提示內容
+                                input.dataset.hintType = "initial"; // 標記提示類型
+                                input.focus();
+                                input.classList.remove("incorrect");
+                                input.classList.add("has-hint"); // 添加提示標記
+                                
+                                // 將光標移到提示後面
+                                this.setCaretPositionToEnd(input);
+                                
+                                // 記錄一級提示扣分 - 新增
+                                ScoreManager.deductScore('hintLevel1', 1);
+                                
+                                // 顯示提示信息
+                                UIManager.showFeedback(`提示：「${char}」的聲母為「${pinyinParts.initial}」，請繼續輸入韻母和聲調`, 'info');
+                                
+                                // 為輸入框添加防刪除提示的事件監聽器
+                                this.addProtectedInputListener(input);
+                            }, 300);
+                            
+                        } else if (errorCount === 2) {
+                            // 第二次錯誤：顯示聲母和韻母 (不帶聲調)
+                            input.classList.add("incorrect");
+                            input.classList.remove("correct");
+                            
+                            // 添加錯誤震動反饋
+                            this.showIncorrectFeedback(charContainer);
+                            
+                            // 播放錯誤音效
+                            SoundManager.playIncorrectSound();
+                            
+                            // 等待一小段時間後提供聲母+韻母提示
+                            setTimeout(() => {
+                                const baseForm = pinyinParts.initial + pinyinParts.final;
+                                // 提供拼音基本形式(不含聲調)提示並設置為不可刪除
+                                input.value = baseForm;
+                                input.dataset.hint = baseForm; // 更新提示內容
+                                input.dataset.hintType = "base"; // 更新提示類型
+                                input.focus();
+                                input.classList.remove("incorrect");
+                                input.classList.add("has-hint"); // 添加提示標記
+                                
+                                // 將光標移到提示後面
+                                this.setCaretPositionToEnd(input);
+                                
+                                // 記錄二級提示扣分 - 新增
+                                ScoreManager.deductScore('hintLevel2', 1);
+                                
+                                // 顯示提示信息
+                                UIManager.showFeedback(`提示：「${char}」的拼音為「${baseForm}」，請選擇正確的聲調`, 'info');
+                                
+                                // 為輸入框添加防刪除提示的事件監聽器
+                                this.addProtectedInputListener(input);
+                            }, 300);
+                            
+                        } else {
+                            // 第三次錯誤：跳過此字自動進入下一個字
+                            charContainer.classList.add('skipped');
+                            
+                            UIManager.showFeedback(`已達到最大嘗試次數，「${char}」的正確拼音是「${standardPinyin}」，已跳過此字`, 'error');
+                            
+                            // 自動跳到下一個字符
+                            setTimeout(() => {
+                                // 獲取所有字符容器
+                                const allChars = Array.from(document.querySelectorAll('.char-container'));
+                                const currentIndex = allChars.indexOf(charContainer);
+                                
+                                // 找到下一個未完成的字符
+                                const nextChar = this.findNextIncompleteChar(currentIndex, allChars);
+                                
+                                if (nextChar) {
+                                    nextChar.querySelector('.char-display').click();
+                                }
+                            }, 1500);
+                        }
+                    } else {
+                        // 如果無法獲取標準拼音，則使用普通錯誤處理邏輯
+                        input.classList.add("incorrect");
+                        input.classList.remove("correct");
+                        
+                        // 添加錯誤震動反饋
+                        this.showIncorrectFeedback(charContainer);
+                        
+                        // 播放錯誤音效
+                        SoundManager.playIncorrectSound();
+                        
+                        // 錯誤後自動清空輸入框
+                        setTimeout(() => {
+                            input.value = '';
+                            input.focus();
+                            input.classList.remove("incorrect");
+                        }, 300);
+                    }
+                    
+                    // 重置連擊數
+                    ComboManager.reset();
+                }
+            },
+            
+            // 找到下一個未完成的字符
+            findNextIncompleteChar(currentIndex, allChars) {
+                // 從當前位置往後找
+                for (let i = currentIndex + 1; i < allChars.length; i++) {
+                    if (!allChars[i].classList.contains('completed') && 
+                        !allChars[i].classList.contains('skipped')) {
+                        return allChars[i];
+                    }
+                }
+                
+                // 如果沒找到，從頭找
+                for (let i = 0; i < currentIndex; i++) {
+                    if (!allChars[i].classList.contains('completed') && 
+                        !allChars[i].classList.contains('skipped')) {
+                        return allChars[i];
+                    }
+                }
+                
+                return null; // 沒有未完成的字符
+            },
+            
+            // 正確反饋動畫
+            showCorrectFeedback(element) {
+                element.classList.add('correct-animation');
+                setTimeout(() => {
+                    element.classList.remove('correct-animation');
+                }, 500);
+            },
+            
+            // 錯誤反饋動畫
+            showIncorrectFeedback(element) {
+                element.classList.add('incorrect-animation');
+                setTimeout(() => {
+                    element.classList.remove('incorrect-animation');
+                }, 500);
+            },
+            
+            // 設置輸入框光標位置到最後面
+            setCaretPositionToEnd(input) {
+                if (input) {
+                    input.focus();
+                    input.selectionStart = input.selectionEnd = input.value.length;
+                }
+            },
+            
+            // 為輸入框添加防刪除提示的事件監聽器
+            addProtectedInputListener(input) {
+                if (!input) return;
+                
+                // 移除任何現有的同類監聽器，避免重複
+                input.removeEventListener('keydown', this.protectedInputHandler);
+                
+                // 創建一個帶有閉包的處理函數，以便可以訪問input的dataset
+                this.protectedInputHandler = (e) => {
+                    // 獲取現有提示
+                    const hint = input.dataset.hint || '';
+                    
+                    // 如果是Backspace鍵並且可能會刪除提示內容
+                    if ((e.key === 'Backspace' || e.key === 'Delete') && 
+                        (input.selectionStart <= hint.length || 
+                         (input.selectionStart === input.selectionEnd && input.selectionStart <= hint.length))) {
+                        // 阻止默認行為
+                        e.preventDefault();
+                        
+                        // 視覺反饋
+                        input.classList.add('protected-hint');
+                        setTimeout(() => {
+                            input.classList.remove('protected-hint');
+                        }, 300);
+                        
+                        // 如果選中了部分內容，則僅保留選擇範圍之外的部分
+                        if (input.selectionStart !== input.selectionEnd) {
+                            // 如果選擇範圍完全在提示之外，則允許刪除
+                            if (input.selectionStart >= hint.length) {
+                                // 不阻止，讓默認行為進行
+                                return true;
+                            }
+                            
+                            // 如果選擇跨越了提示邊界，只保留提示和提示之後的部分
+                            if (input.selectionEnd > hint.length) {
+                                const textAfterHint = input.value.substring(input.selectionEnd);
+                                input.value = hint + textAfterHint;
+                                this.setCaretPositionToEnd(input, hint.length);
+                            } else {
+                                // 重置輸入值以保護提示
+                                input.value = hint;
+                                this.setCaretPositionToEnd(input);
+                            }
+                        }
+                    }
+                };
+                
+                // 添加事件監聽器
+                input.addEventListener('keydown', this.protectedInputHandler);
+            },
+            
+            // 檢查所有詞彙輸入是否正確
+            checkAllVocabularyInputs() {
+                const inputs = this.practiceViews.pinyinInputs.querySelectorAll('.pinyin-input');
+                let allCorrect = true;
+                
+                inputs.forEach(input => {
+                    if (!input.classList.contains('correct')) {
+                        allCorrect = false;
+                    }
+                });
+                
+                if (allCorrect && inputs.length > 0) {
+                    // 更新進度 - 在跳到下一詞前更新進度
+                    this.updateProgress();
+                    
+                    // 全部正確，自動跳至下一詞
+                    this.showFeedback('太棒了！全部正確！', 'success');
+                    
+                    // 延遲一下自動前往下一個詞彙
+                    setTimeout(() => {
+                        GameLogic.nextWord();
+                    }, 500);
+                }
+            },
+            
+            // 檢查文章輸入是否正確
+            checkArticleInput(input) {
+                const index = parseInt(input.dataset.index);
+                const char = input.dataset.char;
+                const userInput = input.value.trim();
+                
+                if (!userInput) return; // 如果輸入為空，不做處理
+                
+                // 獲取或初始化錯誤計數
+                const charSpan = document.querySelector(`.article-char[data-index="${index}"]`);
+                if (!charSpan.dataset.errorCount) {
+                    charSpan.dataset.errorCount = '0';
+                }
+                
+                // 檢查拼音
+                const isCorrect = DataManager.checkPinyin(char, userInput, GameLogic.requireTones);
+                
+                if (isCorrect) {
+                    input.classList.add("correct");
+                    input.classList.remove("incorrect");
+                    charSpan.classList.add('completed');
+                    
+                    // 添加正確反饋動畫
+                    this.showCorrectFeedback(charSpan);
+                    
+                    // 播放正確音效
+                    SoundManager.playCorrectSound();
+                    
+                    // 增加連擊數
+                    ComboManager.increment();
+                    
+                    // 增加基礎得分 (文章模式)
+                    const totalChars = Array.from(GameLogic.currentArticle.content).filter(c => 
+                        DataManager.isChineseCharacter(c)
+                    ).length;
+                    if (totalChars > 0) {
+                        const pointsPerChar = 700 / totalChars; // 基礎分700分平均分配
+                        ScoreManager.addScore(Math.round(pointsPerChar), 'base');
+                    }
+                    
+                    // 重置錯誤計數
+                    charSpan.dataset.errorCount = '0';
+                    
+                    // 更新拼音數據
+                    GameLogic.currentArticle.pinyins[index] = userInput;
+                    
+                    // 找到下一個漢字並聚焦
+                    const nextChar = this.findNextChineseChar(index);
+                    if (nextChar) {
+                        // 延遲一下讓用戶看到正確反饋
+                        setTimeout(() => {
+                            nextChar.click();
+                        }, 300);
+                    } else {
+                        // 沒有下一個漢字，檢查是否完成所有
+                        this.checkAllArticleInputs();
+                    }
+                } else {
+                    // 增加錯誤計數
+                    let errorCount = parseInt(charSpan.dataset.errorCount) || 0;
+                    errorCount++;
+                    charSpan.dataset.errorCount = errorCount.toString();
+                    
+                    // 獲取字符的標準拼音以進行分解
+                    const standardPinyin = DataManager.getStandardPinyin(char, GameLogic.requireTones);
+                    if (standardPinyin) {
+                        const pinyinParts = DataManager.decomposePinyin(standardPinyin);
+                        
+                        if (errorCount === 1) {
+                            // 第一次錯誤：顯示聲母提示
+                            input.classList.add("incorrect");
+                            input.classList.remove("correct");
+                            charSpan.classList.remove('completed');
+                            
+                            // 添加錯誤震動反饋
+                            this.showIncorrectFeedback(charSpan);
+                            
+                            // 播放錯誤音效
+                            SoundManager.playIncorrectSound();
+                            
+                            // 等待一小段時間後提供聲母提示
+                            setTimeout(() => {
+                                // 提供聲母提示並設置為不可刪除
+                                input.value = pinyinParts.initial;
+                                input.dataset.hint = pinyinParts.initial; // 存儲提示內容
+                                input.dataset.hintType = "initial"; // 標記提示類型
+                                input.focus();
+                                input.classList.remove("incorrect");
+                                input.classList.add("has-hint"); // 添加提示標記
+                                
+                                // 將光標移到提示後面
+                                this.setCaretPositionToEnd(input);
+                                
+                                // 顯示提示信息
+                                UIManager.showFeedback(`提示：「${char}」的聲母為「${pinyinParts.initial}」，請繼續輸入韻母和聲調`, 'info');
+                                
+                                // 為輸入框添加防刪除提示的事件監聽器
+                                this.addProtectedInputListener(input);
+                            }, 300);
+                            
+                        } else if (errorCount === 2) {
+                            // 第二次錯誤：顯示聲母和韻母 (不帶聲調)
+                            input.classList.add("incorrect");
+                            input.classList.remove("correct");
+                            charSpan.classList.remove('completed');
+                            
+                            // 添加錯誤震動反饋
+                            this.showIncorrectFeedback(charSpan);
+                            
+                            // 播放錯誤音效
+                            SoundManager.playIncorrectSound();
+                            
+                            // 等待一小段時間後提供聲母+韻母提示
+                            setTimeout(() => {
+                                const baseForm = pinyinParts.initial + pinyinParts.final;
+                                // 提供拼音基本形式(不含聲調)提示並設置為不可刪除
+                                input.value = baseForm;
+                                input.dataset.hint = baseForm; // 更新提示內容
+                                input.dataset.hintType = "base"; // 更新提示類型
+                                input.focus();
+                                input.classList.remove("incorrect");
+                                input.classList.add("has-hint"); // 添加提示標記
+                                
+                                // 將光標移到提示後面
+                                this.setCaretPositionToEnd(input);
+                                
+                                // 顯示提示信息
+                                UIManager.showFeedback(`提示：「${char}」的拼音為「${baseForm}」，請選擇正確的聲調`, 'info');
+                                
+                                // 為輸入框添加防刪除提示的事件監聽器
+                                this.addProtectedInputListener(input);
+                            }, 300);
+                            
+                        } else {
+                            // 第三次錯誤：跳過此字自動進入下一個字
+                            charSpan.classList.add('skipped');
+                            charSpan.classList.add('completed');
+                            
+                            UIManager.showFeedback(`已達到最大嘗試次數，「${char}」的正確拼音是「${standardPinyin}」，已跳過此字`, 'error');
+                            
+                            // 記錄跳過的字符
+                            GameLogic.currentArticle.skippedChars[index] = true;
+                            GameLogic.skippedCount++;
+                            
+                            // 找到下一個漢字並聚焦
+                            const nextChar = this.findNextChineseChar(index);
+                            if (nextChar) {
+                                // 延遲一下讓用戶看到正確反饋
+                                setTimeout(() => {
+                                    nextChar.click();
+                                }, 1500);
+                            } else {
+                                // 沒有下一個漢字，檢查是否完成所有
+                                this.checkAllArticleInputs();
+                            }
+                        }
+                    } else {
+                        // 如果無法獲取標準拼音，則使用普通錯誤處理邏輯
+                        input.classList.add("incorrect");
+                        input.classList.remove("correct");
+                        charSpan.classList.remove('completed');
+                        
+                        // 添加錯誤震動反饋
+                        this.showIncorrectFeedback(charSpan);
+                        
+                        // 播放錯誤音效
+                        SoundManager.playIncorrectSound();
+                        
+                        // 錯誤後自動清空輸入框
+                        setTimeout(() => {
+                            input.value = '';
+                            input.focus();
+                            input.classList.remove("incorrect");
+                        }, 300); // 等待一小段時間後清空，讓用戶有時間看到錯誤反饋
+                    }
+                    
+                    // 重置連擊數
+                    ComboManager.reset();
+                }
+                
+                // 更新進度
+                this.updateProgress();
+            },
+            
+            // 檢查所有文章輸入是否正確
+            checkAllArticleInputs() {
+                const charSpans = this.practiceViews.articleDisplay.querySelectorAll('.article-char');
+                let totalChars = 0;
+                let completedChars = 0;
+                let skippedChars = 0;
+                
+                charSpans.forEach(span => {
+                    if (DataManager.isChineseCharacter(span.textContent)) {
+                        totalChars++;
+                        if (span.classList.contains('completed')) {
+                            completedChars++;
+                        }
+                        if (span.classList.contains('skipped')) {
+                            skippedChars++;
+                        }
+                    }
+                });
+                
+                // 所有字符都已完成或跳過
+                if ((completedChars + skippedChars) === totalChars && totalChars > 0) {
+                    this.showFeedback('恭喜！你已完成所有漢字的拼音！', 'success');
+                    GameLogic.completeCurrentPractice();
+                }
+            },
+            
+            // 跳過當前詞彙
+            skipCurrentVocabulary() {
+                GameLogic.currentWord.skipped = true;
+                
+                // 標記所有輸入為跳過
+                const inputs = this.practiceViews.pinyinInputs.querySelectorAll('.pinyin-input');
+                inputs.forEach(input => {
+                    const charContainer = input.closest('.char-container');
+                    if (charContainer) {
+                        charContainer.classList.add('skipped');
+                    }
+                });
+                
+                // 顯示跳過反饋
+                this.showFeedback('已跳過當前詞彙', 'info');
+                
+                // 自動前往下一個詞彙
+                setTimeout(() => {
+                    GameLogic.nextWord();
+                }, 300);
+            },
+            
+            // 跳過當前文章字符
+            skipCurrentArticleChar() {
+                const currentChar = document.querySelector('.article-char.current');
+                if (currentChar) {
+                    const index = parseInt(currentChar.dataset.index);
+                    currentChar.classList.add('skipped');
+                    currentChar.classList.add('completed');
+                    
+                    // 記錄跳過的字符
+                    GameLogic.currentArticle.skippedChars[index] = true;
+                    
+                    // 找到下一個漢字並聚焦
+                    const nextChar = this.findNextChineseChar(index);
+                    if (nextChar) {
+                        // 延遲一下讓用戶看到跳過反饋
+                        setTimeout(() => {
+                            nextChar.click();
+                        }, 300);
+                    } else {
+                        // 沒有下一個漢字，檢查是否完成所有
+                        this.checkAllArticleInputs();
+                    }
+                }
+                
+                // 更新進度
+                this.updateProgress();
+            },
+            
+            // 找到下一個漢字
+            findNextChineseChar(currentIndex) {
+                const charSpans = this.practiceViews.articleDisplay.querySelectorAll('.article-char');
+                
+                for (let i = currentIndex + 1; i < charSpans.length; i++) {
+                    const span = charSpans[i];
+                    if (DataManager.isChineseCharacter(span.textContent) && 
+                        !span.classList.contains('completed') && 
+                        !span.classList.contains('skipped')) {
+                        return span;
+                    }
+                }
+                
+                return null; // 沒有下一個未完成的漢字
+            },
+            
+            // 更新進度
+            updateProgress() {
+                let totalItems = 0;
+                let completedItems = 0;
+                
+                if (GameLogic.mode === 'vocabulary') {
+                    // 詞彙模式: 計算已完成的漢字數而非詞彙數
+                    totalItems = 0;
+                    completedItems = 0;
+                    
+                    // 計算總漢字數
+                    GameLogic.vocabularyList.forEach(word => {
+                        word.characters.forEach(char => {
+                            if (DataManager.isChineseCharacter(char)) {
+                                totalItems++;
+                            }
+                        });
+                    });
+                    
+                    // 計算已完成漢字數
+                    // 當前詞彙之前的所有詞彙
+                    for (let i = 0; i < GameLogic.currentWordIndex; i++) {
+                        const word = GameLogic.vocabularyList[i];
+                        word.characters.forEach(char => {
+                            if (DataManager.isChineseCharacter(char)) {
+                                completedItems++;
+                            }
+                        });
+                    }
+                    
+                    // 當前詞彙的已完成字符
+                    if (GameLogic.currentWord) {
+                        const containers = document.querySelectorAll('.char-container');
+                        containers.forEach(container => {
+                            if (container.classList.contains('completed')) {
+                                completedItems++;
+                            }
+                        });
+                    }
+                } else {
+                    // 文章模式: 計算已完成的漢字數
+                    const charSpans = this.practiceViews.articleDisplay.querySelectorAll('.article-char');
+                    
+                    charSpans.forEach(span => {
+                        if (DataManager.isChineseCharacter(span.textContent)) {
+                            totalItems++;
+                            if (span.classList.contains('completed')) {
+                                completedItems++;
+                            }
+                        }
+                    });
+                }
+                
+                // 更新進度文本
+                this.practiceViews.progressText.textContent = `進度: ${completedItems}/${totalItems}`;
+                
+                // 計算進度百分比
+                const progressPercent = totalItems > 0 ? (completedItems / totalItems) * 100 : 0;
+                
+                // 更新巴士進度條
+                const progressBar = document.getElementById('progress-bar');
+                const busIcon = document.getElementById('bus-icon');
+                
+                if (progressBar && busIcon) {
+                    // 更新進度條和巴士位置
+                    progressBar.style.width = `${progressPercent}%`;
+                    busIcon.style.left = `${progressPercent}%`;
+                    
+                    // 到達終點動畫
+                    if (progressPercent >= 98) {
+                        busIcon.classList.add('at-destination');
+                    } else {
+                        busIcon.classList.remove('at-destination');
+                    }
+                }
+                
+                return { total: totalItems, completed: completedItems };
+            },
+            
+            // 顯示反饋消息
+            showFeedback(message, type) {
+                const feedback = this.practiceViews.feedbackMessage;
+                feedback.textContent = message;
+                feedback.className = 'mt-4 text-center text-lg p-3 rounded-lg';
+                
+                if (type === 'success') {
+                    feedback.classList.add('bg-green-100', 'text-green-800', 'dark:bg-green-900', 'dark:text-green-200');
+                } else if (type === 'error') {
+                    feedback.classList.add('bg-red-100', 'text-red-800', 'dark:bg-red-900', 'dark:text-red-200');
+                } else {
+                    feedback.classList.add('bg-blue-100', 'text-blue-800', 'dark:bg-blue-900', 'dark:text-blue-200');
+                }
+                
+                feedback.classList.remove('hidden');
+                
+                // 5秒後自動隱藏
+                setTimeout(() => {
+                    feedback.classList.add('hidden');
+                }, 5000);
+            },
+            
+            // 顯示完成畫面
+            showCompletion(stats) {
+                // 更新統計信息
+                this.completionElements.totalCount.textContent = stats.totalItems;
+                
+                // 計算用時
+                let minutes = 0;
+                let seconds = 0;
+                if (typeof stats.timeSpent === 'number' && !isNaN(stats.timeSpent)) {
+                    console.log('時間格式化: ' + stats.timeSpent + ' 秒');
+                    minutes = Math.floor(stats.timeSpent / 60);
+                    seconds = Math.floor(stats.timeSpent % 60);
+                } else {
+                    console.log('無效的時間值: ', stats.timeSpent);
+                    // 默認顯示1秒鐘
+                    seconds = 1;
+                }
+                
+                // 格式化時間字符串 (確保秒數總是兩位數)
+                const timeString = `${minutes}:${seconds < 10 ? '0' : ''}${seconds}`;
+                console.log('格式化的時間字符串: ' + timeString);
+                this.completionElements.timeSpent.textContent = timeString;
+                
+                // 顯示跳過信息
+                if (stats.skippedCount > 0) {
+                    this.completionElements.skippedCount.textContent = stats.skippedCount;
+                    document.getElementById('skipped-info').classList.remove('hidden');
+                } else {
+                    document.getElementById('skipped-info').classList.add('hidden');
+                }
+                
+                // 顯示使用提示的信息
+                if (stats.hintCount > 0) {
+                    document.getElementById('hint-count').textContent = stats.hintCount;
+                    document.getElementById('hint-info').classList.remove('hidden');
+                } else {
+                    document.getElementById('hint-info').classList.add('hidden');
+                }
+                
+                // 顯示實際完成題數
+                document.getElementById('actual-count').textContent = stats.actualCompletedItems;
+                
+                // 切換到完成畫面
+                this.showScreen('completion');
+            },
+            
+            // 顯示提交狀態
+            showSubmitStatus(message, type, isHTML = false) {
+                const statusElement = document.getElementById('submit-status');
+                if (!statusElement) return;
+                
+                if (isHTML) {
+                    statusElement.innerHTML = message;
+                } else {
+                    statusElement.textContent = message;
+                }
+                
+                statusElement.className = 'mt-3 text-sm';
+                
+                if (type === 'success') {
+                    statusElement.classList.add('text-green-600', 'dark:text-green-400');
+                } else if (type === 'error') {
+                    statusElement.classList.add('text-red-600', 'dark:text-red-400');
+                } else {
+                    statusElement.classList.add('text-blue-600', 'dark:text-blue-400');
+                }
+                
+                statusElement.classList.remove('hidden');
+            }
+        };
+        
+        // 音效系統管理
+        const SoundManager = {
+            // 音頻上下文
+            audioContext: null,
+            
+            // 是否已初始化
+            initialized: false,
+            
+            // 音效是否啟用
+            soundEnabled: true,
+            
+            // 初始化音效系統
+            init() {
+                try {
+                    // 創建音頻上下文
+                    this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                    this.initialized = true;
+                    
+                    // 初始化音效控制按鈕
+                    this.initSoundToggle();
+                    
+                    console.log('音效系統初始化成功');
+                } catch (error) {
+                    console.error('音效系統初始化失敗:', error);
+                    this.initialized = false;
+                }
+            },
+            
+            // 初始化音效控制按鈕
+            initSoundToggle() {
+                const soundToggle = document.getElementById('sound-toggle');
+                if (soundToggle) {
+                    // 設置初始狀態
+                    this.updateSoundToggleIcon();
+                    
+                    // 綁定點擊事件
+                    soundToggle.addEventListener('click', () => {
+                        this.soundEnabled = !this.soundEnabled;
+                        this.updateSoundToggleIcon();
+                    });
+                }
+            },
+            
+            // 更新音效控制按鈕圖標
+            updateSoundToggleIcon() {
+                const soundToggle = document.getElementById('sound-toggle');
+                if (soundToggle) {
+                    if (this.soundEnabled) {
+                        soundToggle.innerHTML = `
+                            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-volume-2">
+                                <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+                                <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path>
+                            </svg>
+                        `;
+                    } else {
+                        soundToggle.innerHTML = `
+                            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="feather feather-volume-x">
+                                <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+                                <line x1="23" y1="9" x2="17" y2="15"></line>
+                                <line x1="17" y1="9" x2="23" y2="15"></line>
+                            </svg>
+                        `;
+                    }
+                }
+            },
+            
+            // 音量設置 - 統一所有模式的音量
+            baseVolume: 0.5, // 增加基礎音量，使音效更明顯
+            
+            // 播放正確答案音效
+            playCorrectSound() {
+                if (!this.initialized || !this.soundEnabled) return;
+                
+                try {
+                    const oscillator = this.audioContext.createOscillator();
+                    const gainNode = this.audioContext.createGain();
+                    
+                    oscillator.type = 'sine';
+                    oscillator.frequency.setValueAtTime(880, this.audioContext.currentTime); // A5
+                    oscillator.frequency.exponentialRampToValueAtTime(1320, this.audioContext.currentTime + 0.1); // E6
+                    
+                    // 使用統一的音量設置
+                    gainNode.gain.setValueAtTime(this.baseVolume, this.audioContext.currentTime);
+                    gainNode.gain.exponentialRampToValueAtTime(0.01, this.audioContext.currentTime + 0.3);
+                    
+                    oscillator.connect(gainNode);
+                    gainNode.connect(this.audioContext.destination);
+                    
+                    oscillator.start();
+                    oscillator.stop(this.audioContext.currentTime + 0.3);
+                } catch (error) {
+                    console.error('播放正確音效出錯:', error);
+                }
+            },
+            
+            // 播放錯誤答案音效
+            playIncorrectSound() {
+                if (!this.initialized || !this.soundEnabled) return;
+                
+                try {
+                    const oscillator = this.audioContext.createOscillator();
+                    const gainNode = this.audioContext.createGain();
+                    
+                    oscillator.type = 'sawtooth';
+                    oscillator.frequency.setValueAtTime(220, this.audioContext.currentTime); // A3
+                    oscillator.frequency.exponentialRampToValueAtTime(110, this.audioContext.currentTime + 0.2); // A2
+                    
+                    // 使用統一的音量設置
+                    gainNode.gain.setValueAtTime(this.baseVolume * 0.8, this.audioContext.currentTime); // 錯誤音效略小一點
+                    gainNode.gain.exponentialRampToValueAtTime(0.01, this.audioContext.currentTime + 0.3);
+                    
+                    oscillator.connect(gainNode);
+                    gainNode.connect(this.audioContext.destination);
+                    
+                    oscillator.start();
+                    oscillator.stop(this.audioContext.currentTime + 0.3);
+                } catch (error) {
+                    console.error('播放錯誤音效出錯:', error);
+                }
+            },
+            
+            // 播放連擊音效
+            playComboSound(comboLevel) {
+                if (!this.initialized || !this.soundEnabled) return;
+                
+                try {
+                    const oscillator = this.audioContext.createOscillator();
+                    const gainNode = this.audioContext.createGain();
+                    
+                    oscillator.type = 'triangle';
+                    
+                    // 根據連擊等級調整頻率
+                    const baseFreq = 440; // A4
+                    const freqMultiplier = 1 + (comboLevel * 0.1);
+                    oscillator.frequency.setValueAtTime(baseFreq * freqMultiplier, this.audioContext.currentTime);
+                    oscillator.frequency.exponentialRampToValueAtTime(baseFreq * freqMultiplier * 1.5, this.audioContext.currentTime + 0.1);
+                    
+                    // 使用統一的音量設置
+                    gainNode.gain.setValueAtTime(this.baseVolume * 0.6, this.audioContext.currentTime);
+                    gainNode.gain.exponentialRampToValueAtTime(0.01, this.audioContext.currentTime + 0.2);
+                    
+                    oscillator.connect(gainNode);
+                    gainNode.connect(this.audioContext.destination);
+                    
+                    oscillator.start();
+                    oscillator.stop(this.audioContext.currentTime + 0.2);
+                } catch (error) {
+                    console.error('播放連擊音效出錯:', error);
+                }
+            },
+            
+            // 播放完成音效
+            playCompletionSound() {
+                if (!this.initialized || !this.soundEnabled) return;
+                
+                try {
+                    const notes = [
+                        { freq: 523.25, duration: 0.1 }, // C5
+                        { freq: 659.25, duration: 0.1 }, // E5
+                        { freq: 783.99, duration: 0.1 }, // G5
+                        { freq: 1046.50, duration: 0.3 }  // C6
+                    ];
+                    
+                    notes.forEach((note, index) => {
+                        setTimeout(() => {
+                            const oscillator = this.audioContext.createOscillator();
+                            const gainNode = this.audioContext.createGain();
+                            
+                            oscillator.type = 'sine';
+                            oscillator.frequency.value = note.freq;
+                            
+                            // 使用統一音量控制
+                            gainNode.gain.setValueAtTime(this.baseVolume * 0.8, this.audioContext.currentTime);
+                            gainNode.gain.exponentialRampToValueAtTime(0.01, this.audioContext.currentTime + note.duration);
+                            
+                            oscillator.connect(gainNode);
+                            gainNode.connect(this.audioContext.destination);
+                            
+                            oscillator.start();
+                            oscillator.stop(this.audioContext.currentTime + note.duration);
+                        }, index * 150);
+                    });
+                } catch (error) {
+                    console.error('播放完成音效出錯:', error);
+                }
+            }
+        };
+        
+        // 連擊計數器管理
+        const ComboManager = {
+            // 當前連擊數
+            count: 0,
+            
+            // 顯示連擊數的元素
+            counterElement: document.getElementById('combo-counter'),
+            numberElement: document.getElementById('combo-number'),
+            
+            // 初始化
+            init() {
+                this.reset();
+            },
+            
+            // 重置連擊數
+            reset() {
+                this.count = 0;
+                this.updateDisplay();
+                this.counterElement.classList.add('hidden');
+            },
+            
+            // 增加連擊數
+            increment() {
+                this.count++;
+                this.updateDisplay();
+                
+                // 顯示連擊計數器
+                this.counterElement.classList.remove('hidden');
+                
+                // 為連擊數添加動畫效果
+                this.numberElement.classList.add('combo-pulse');
+                setTimeout(() => {
+                    this.numberElement.classList.remove('combo-pulse');
+                }, 500);
+                
+                // 更新連擊計數器的等級樣式
+                this.updateComboLevel();
+                
+                // 更新 ScoreManager 的最高連擊數
+                ScoreManager.updateMaxCombo(this.count);
+                
+                // 播放連擊音效
+                const comboLevel = this.getComboLevel();
+                if (comboLevel > 0) {
+                    SoundManager.playComboSound(comboLevel);
+                }
+            },
+            
+            // 獲取當前連擊等級 (1-5)
+            getComboLevel() {
+                if (this.count >= 20) return 5;
+                if (this.count >= 15) return 4;
+                if (this.count >= 10) return 3;
+                if (this.count >= 5) return 2;
+                if (this.count >= 3) return 1;
+                return 0;
+            },
+            
+            // 更新連擊計數器的等級外觀
+            updateComboLevel() {
+                // 移除所有等級樣式
+                this.counterElement.classList.remove('level-1', 'level-2', 'level-3', 'level-4', 'level-5');
+                
+                // 添加當前等級樣式
+                const level = this.getComboLevel();
+                if (level > 0) {
+                    this.counterElement.classList.add(`level-${level}`);
+                }
+            },
+            
+            // 更新顯示
+            updateDisplay() {
+                if (this.numberElement) {
+                    this.numberElement.textContent = this.count;
+                }
+            }
+        };
+
+        // 核心模組: 遊戲邏輯
+        const GameLogic = {
+            // 直接提交當前進度
+            submitCurrentProgress() {
+                // 直接提交，不顯示確認對話框
+                // 在某些環境下confirm對話框可能無法正常工作，直接跳過此步驟
+                // const confirmSubmit = confirm('確定要提交目前的進度嗎？未完成的部分將被標記為跳過。');
+                // if (!confirmSubmit) return;
+                
+                // 標記所有未完成項目為跳過
+                if (this.mode === 'vocabulary') {
+                    // 詞彙模式：標記當前未完成的詞彙和未處理的詞彙
+                    const currentInputs = document.querySelectorAll('.char-container');
+                    currentInputs.forEach(container => {
+                        if (!container.classList.contains('completed')) {
+                            container.classList.add('skipped');
+                        }
+                    });
+                    
+                    // 未處理的詞彙也標記為跳過
+                    for (let i = this.currentWordIndex; i < this.vocabularyList.length; i++) {
+                        this.vocabularyList[i].skipped = true;
+                        this.skippedCount++;
+                    }
+                } else {
+                    // 文章模式：標記所有未完成的字符為跳過
+                    const charSpans = document.querySelectorAll('.article-char');
+                    charSpans.forEach(span => {
+                        if (DataManager.isChineseCharacter(span.textContent) && 
+                            !span.classList.contains('completed')) {
+                            span.classList.add('skipped');
+                            span.classList.add('completed');
+                            
+                            const index = parseInt(span.dataset.index);
+                            this.currentArticle.skippedChars[index] = true;
+                            this.skippedCount++;
+                        }
+                    });
+                }
+                
+                // 完成練習並顯示結果
+                this.completeCurrentPractice();
+            },
+            // 遊戲狀態
+            mode: 'vocabulary', // vocabulary 或 article
+            requireTones: true,
+            
+            // 詞彙模式數據
+            vocabularyList: [],
+            currentWordIndex: 0,
+            currentWord: null,
+            
+            // 文章模式數據
+            currentArticle: null,
+            
+            // 計時器
+            startTime: 0,
+            
+            // 跳過計數
+            skippedCount: 0,
+            
+            // 學生資料
+            studentData: null,
+            
+            // 連續輸入模式
+            continuousMode: true, // 默認啟用連續輸入
+            
+            // 初始化游戲
+            init() {
+                // 初始化數據管理器
+                DataManager.init();
+                
+                // 移除檢查權限按鈕事件，因為已經移除了權限檢查
+                
+                // 綁定按鈕事件
+                document.getElementById('vocabulary-mode-btn').addEventListener('click', () => this.setMode('vocabulary'));
+                document.getElementById('article-mode-btn').addEventListener('click', () => this.setMode('article'));
+                document.getElementById('start-practice').addEventListener('click', () => this.startPractice());
+                document.getElementById('back-to-input').addEventListener('click', () => UIManager.showScreen('input'));
+                // 移除下一個按鈕的事件監聽，因為按鈕已被移除
+                // document.getElementById('next-word').addEventListener('click', () => this.nextWord());
+                document.getElementById('skip-item').addEventListener('click', () => this.skipCurrentItem());
+                document.getElementById('practice-again').addEventListener('click', () => this.restartPractice());
+                document.getElementById('new-content').addEventListener('click', () => UIManager.showScreen('input'));
+                document.getElementById('show-answer').addEventListener('click', () => this.showAnswer());
+                document.getElementById('submit-directly').addEventListener('click', function() {
+                    GameLogic.submitCurrentProgress();
+                });
+                
+                // 學生身份相關監聽器
+                document.getElementById('student-class').addEventListener('change', handleStudentIdentityChange);
+                document.getElementById('student-id').addEventListener('input', handleStudentIdentityChange);
+                document.getElementById('submit-data').addEventListener('click', submitToGoogleForm);
+                
+                // 連續輸入模式監聽
+                document.getElementById('continuous-mode').addEventListener('change', (e) => {
+                    this.continuousMode = e.target.checked;
+                });
+                
+                // 添加鍵盤導航事件
+                document.addEventListener('keydown', this.handleKeyNavigation.bind(this));
+                
+                // 初始顯示
+                UIManager.showScreen('input');
+                this.setMode('vocabulary');
+            },
+            
+            // 處理鍵盤導航
+            handleKeyNavigation(e) {
+                // 僅在連續輸入模式啟用時且在練習界面才生效
+                if (!this.continuousMode || 
+                    document.getElementById('practice-screen').classList.contains('hidden')) {
+                    return;
+                }
+                
+                if (this.mode === 'vocabulary') {
+                    // 詞彙模式的鍵盤導航
+                    const activeChar = document.querySelector('.char-container.active-char');
+                    if (!activeChar) return;
+                    
+                    const allChars = Array.from(document.querySelectorAll('.char-container'));
+                    const currentIndex = allChars.indexOf(activeChar);
+                    
+                    switch (e.key) {
+                        case 'Tab':
+                        case 'ArrowRight':
+                            e.preventDefault();
+                            this.focusNextChar(currentIndex, allChars);
+                            break;
+                        case 'ArrowLeft':
+                            e.preventDefault();
+                            this.focusPrevChar(currentIndex, allChars);
+                            break;
+                        case 'Enter':
+                            e.preventDefault();
+                            // 如果當前輸入框有值，嘗試提交
+                            const input = activeChar.querySelector('.pinyin-input');
+                            if (input && input.value.trim()) {
+                                UIManager.checkVocabularyInput(input);
+                            }
+                            break;
+                        // 數字鍵1-5直接選擇聲調
+                        case '1': case '2': case '3': case '4': case '5':
+                            if (this.requireTones) {
+                                e.preventDefault();
+                                const toneIndex = parseInt(e.key) - 1;
+                                const toneButtons = activeChar.querySelectorAll('.tone-selector button');
+                                if (toneButtons && toneButtons[toneIndex]) {
+                                    toneButtons[toneIndex].click();
+                                }
+                            }
+                            break;
+                    }
+                } else if (this.mode === 'article') {
+                    // 文章模式的鍵盤導航
+                    const currentChar = document.querySelector('.article-char.current');
+                    if (!currentChar) return;
+                    
+                    const allChars = Array.from(document.querySelectorAll('.article-char')).filter(
+                        char => DataManager.isChineseCharacter(char.textContent)
+                    );
+                    const currentCharIndex = allChars.indexOf(currentChar);
+                    
+                    switch (e.key) {
+                        case 'Tab':
+                        case 'ArrowRight':
+                            e.preventDefault();
+                            this.focusNextArticleChar(currentCharIndex, allChars);
+                            break;
+                        case 'ArrowLeft':
+                            e.preventDefault();
+                            this.focusPrevArticleChar(currentCharIndex, allChars);
+                            break;
+                        case 'Enter':
+                            e.preventDefault();
+                            // 如果當前輸入框有值，嘗試提交
+                            const input = currentChar.querySelector('.pinyin-input');
+                            if (input && input.value.trim()) {
+                                UIManager.checkArticleInput(input);
+                            }
+                            break;
+                        // 數字鍵1-5直接選擇聲調
+                        case '1': case '2': case '3': case '4': case '5':
+                            if (this.requireTones) {
+                                e.preventDefault();
+                                const toneIndex = parseInt(e.key) - 1;
+                                const toneButtons = currentChar.querySelectorAll('.tone-selector button');
+                                if (toneButtons && toneButtons[toneIndex]) {
+                                    toneButtons[toneIndex].click();
+                                }
+                            }
+                            break;
+                    }
+                }
+            },
+            
+            // 聚焦下一個文章字符
+            focusNextArticleChar(currentIndex, allChars) {
+                if (currentIndex < allChars.length - 1) {
+                    const nextChar = allChars[currentIndex + 1];
+                    nextChar.click();
+                }
+            },
+            
+            // 聚焦上一個文章字符
+            focusPrevArticleChar(currentIndex, allChars) {
+                if (currentIndex > 0) {
+                    const prevChar = allChars[currentIndex - 1];
+                    prevChar.click();
+                }
+            },
+            
+            // 聚焦下一個字符
+            focusNextChar(currentIndex, allChars) {
+                if (currentIndex < allChars.length - 1) {
+                    const nextChar = allChars[currentIndex + 1];
+                    nextChar.querySelector('.char-display').click();
+                }
+            },
+            
+            // 聚焦上一個字符
+            focusPrevChar(currentIndex, allChars) {
+                if (currentIndex > 0) {
+                    const prevChar = allChars[currentIndex - 1];
+                    prevChar.querySelector('.char-display').click();
+                }
+            },
+            
+            // 設置模式
+            setMode(mode) {
+                this.mode = mode;
+                
+                // 更新UI
+                if (mode === 'vocabulary') {
+                    // 詞彙模式選中狀態
+                    document.getElementById('vocabulary-mode-btn').classList.add('border-primary', 'bg-primary/10', 'text-primary');
+                    document.getElementById('vocabulary-mode-btn').classList.remove('border-transparent', 'hover:bg-gray-100', 'dark:hover:bg-gray-800');
+                    
+                    // 文章模式未選中狀態
+                    document.getElementById('article-mode-btn').classList.remove('border-primary', 'bg-primary/10', 'text-primary');
+                    document.getElementById('article-mode-btn').classList.add('border-transparent', 'hover:bg-gray-100', 'dark:hover:bg-gray-800');
+                    
+                    // 顯示詞彙輸入區，隱藏文章輸入區
+                    document.getElementById('vocabulary-input').classList.remove('hidden');
+                    document.getElementById('article-input').classList.add('hidden');
+                } else {
+                    // 文章模式選中狀態
+                    document.getElementById('article-mode-btn').classList.add('border-primary', 'bg-primary/10', 'text-primary');
+                    document.getElementById('article-mode-btn').classList.remove('border-transparent', 'hover:bg-gray-100', 'dark:hover:bg-gray-800');
+                    
+                    // 詞彙模式未選中狀態
+                    document.getElementById('vocabulary-mode-btn').classList.remove('border-primary', 'bg-primary/10', 'text-primary');
+                    document.getElementById('vocabulary-mode-btn').classList.add('border-transparent', 'hover:bg-gray-100', 'dark:hover:bg-gray-800');
+                    
+                    // 顯示文章輸入區，隱藏詞彙輸入區
+                    document.getElementById('article-input').classList.remove('hidden');
+                    document.getElementById('vocabulary-input').classList.add('hidden');
+                }
+            },
+            
+            // 開始練習
+            startPractice() {
+                console.log('開始練習...');
+                
+                // 檢查 Pinyin Pro 是否已加載
+                if (!DataManager.isPinyinProLoaded) {
+                    alert('Pinyin Pro 拼音引擎尚未加載完成，請稍後再試');
+                    return;
+                }
+                
+                // 獲取用戶設置
+                this.requireTones = UIManager.inputs.requireTones.checked;
+                this.skippedCount = 0;
+                
+                // 重置提示計數
+                this.hintCount = 0;
+                
+                // 清空提示記錄
+                this.vocabularyHints = {};
+                this.articleHints = {};
+                
+                // 重置計分系統
+                ScoreManager.reset();
+                ScoreManager.showScoreDisplay();
+                
+                // 先記錄開始時間，確保計時正確
+                this.startTime = Date.now();
+                console.log('設置開始時間: ' + this.startTime);
+                
+                if (this.mode === 'vocabulary') {
+                    // 獲取詞彙文本
+                    const text = UIManager.inputs.vocabularyText.value;
+                    if (!text.trim()) {
+                        alert('請輸入詞彙！');
+                        return;
+                    }
+                    
+                    // 解析詞彙
+                    this.vocabularyList = DataManager.parseVocabulary(text);
+                    if (this.vocabularyList.length === 0) {
+                        alert('沒有找到有效的詞彙！');
+                        return;
+                    }
+                    
+                    // 初始化
+                    this.currentWordIndex = 0;
+                    this.currentWord = this.vocabularyList[0];
+                    
+                    // 顯示練習界面
+                    UIManager.showScreen('practice');
+                    UIManager.setPracticeMode('vocabulary');
+                    UIManager.showVocabularyPractice(this.currentWord);
+                } else {
+                    // 獲取文章文本
+                    const text = UIManager.inputs.articleText.value;
+                    if (!text.trim()) {
+                        alert('請輸入文章！');
+                        return;
+                    }
+                    
+                    // 解析文章
+                    this.currentArticle = DataManager.parseArticle(text);
+                    if (!this.currentArticle) {
+                        alert('文章解析失敗！');
+                        return;
+                    }
+                    
+                    // 顯示練習界面
+                    UIManager.showScreen('practice');
+                    UIManager.setPracticeMode('article');
+                    UIManager.showArticlePractice(this.currentArticle);
+                    
+                    // 自動點擊第一個漢字
+                    setTimeout(() => {
+                        const firstChar = document.querySelector('.article-char');
+                        if (firstChar && DataManager.isChineseCharacter(firstChar.textContent)) {
+                            firstChar.click();
+                        }
+                    }, 300);
+                }
+                
+                // 更新進度
+                UIManager.updateProgress();
+                
+                // 確認開始時間已設置
+                console.log('練習開始，計時已開始 - 開始時間: ' + this.startTime);
+            },
+            
+            // 下一個詞彙
+            nextWord() {
+                // 如果當前詞彙被跳過，增加跳過計數
+                if (this.currentWord.skipped) {
+                    this.skippedCount++;
+                }
+                
+                // 檢查是否還有下一個詞彙
+                if (this.currentWordIndex < this.vocabularyList.length - 1) {
+                    this.currentWordIndex++;
+                    this.currentWord = this.vocabularyList[this.currentWordIndex];
+                    
+                    // 顯示下一個詞彙
+                    UIManager.showVocabularyPractice(this.currentWord);
+                    
+                    // 更新進度
+                    UIManager.updateProgress();
+                } else {
+                    // 完成所有詞彙
+                    this.completeCurrentPractice();
+                }
+            },
+            
+            // 跳過當前項目
+            skipCurrentItem() {
+                if (this.mode === 'vocabulary') {
+                    UIManager.skipCurrentVocabulary();
+                    // 記錄跳過並扣分
+                    ScoreManager.deductScore('skip');
+                } else {
+                    UIManager.skipCurrentArticleChar();
+                    this.skippedCount++;
+                    // 記錄跳過並扣分
+                    ScoreManager.deductScore('skip');
+                }
+            },
+            
+            // 提示答案計數
+            hintCount: 0,
+            
+            // 用於記錄使用了「顯示答案」功能的詞彙和字符
+            vocabularyHints: {},  // 詞彙模式中使用提示的字符: { wordIndex: [charIndex1, charIndex2, ...] }
+            articleHints: {},     // 文章模式中使用提示的字符索引
+            
+            // 顯示正確答案
+            showAnswer() {
+                // 記錄扣分
+                ScoreManager.deductScore('showAnswer');
+                
+                if (this.mode === 'vocabulary') {
+                    // 詞彙模式: 獲取當前激活的字符
+                    const activeChar = document.querySelector('.char-container.active-char');
+                    if (activeChar) {
+                        const input = activeChar.querySelector('.pinyin-input');
+                        const index = parseInt(input.dataset.index);
+                        const char = input.dataset.char;
+                        
+                        // 獲取標準拼音
+                        const standardPinyin = DataManager.getStandardPinyin(char, this.requireTones);
+                        
+                        if (standardPinyin) {
+                            // 填入正確答案
+                            input.value = standardPinyin;
+                            input.classList.add('correct');
+                            input.classList.remove('incorrect', 'invalid-tone');
+                            UIManager.hideErrorTip(input);
+                            
+                            // 更新拼音數據
+                            this.currentWord.pinyins[index] = standardPinyin;
+                            
+                            // 標記為已完成，但用不同樣式表示是系統填入的
+                            activeChar.classList.add('completed');
+                            activeChar.classList.add('system-answer');
+                            
+                            // 記錄使用了提示的字符
+                            if (!this.vocabularyHints[this.currentWordIndex]) {
+                                this.vocabularyHints[this.currentWordIndex] = [];
+                            }
+                            if (!this.vocabularyHints[this.currentWordIndex].includes(index)) {
+                                this.vocabularyHints[this.currentWordIndex].push(index);
+                                this.hintCount++; // 增加提示計數
+                            }
+                            
+                            // 檢查是否所有輸入都正確
+                            UIManager.checkAllVocabularyInputs();
+                            
+                            // 顯示提示
+                            UIManager.showFeedback(`已顯示「${char}」的標準拼音: ${standardPinyin}`, 'info');
+                            
+                            // 自動跳到下一個字符
+                            // 獲取所有字符容器
+                            const allChars = Array.from(document.querySelectorAll('.char-container'));
+                            const currentIndex = allChars.indexOf(activeChar);
+                            
+                            // 找到下一個未完成的字符
+                            const nextChar = UIManager.findNextIncompleteChar(currentIndex, allChars);
+                            
+                            if (nextChar) {
+                                // 短暫延遲後跳轉，讓用戶看到當前的反饋
+                                setTimeout(() => {
+                                    nextChar.querySelector('.char-display').click();
+                                }, 300);
+                            }
+                        } else {
+                            UIManager.showFeedback(`無法獲取「${char}」的標準拼音`, 'error');
+                        }
+                    } else {
+                        UIManager.showFeedback('請先點擊一個漢字', 'error');
+                    }
+                } else {
+                    // 文章模式: 獲取當前激活的字符
+                    const currentChar = document.querySelector('.article-char.current');
+                    if (currentChar) {
+                        const index = parseInt(currentChar.dataset.index);
+                        // 只獲取第一個字符，避免包含聲調符號
+                        const char = currentChar.textContent.charAt(0);
+                        const input = currentChar.querySelector('.pinyin-input');
+                        
+                        // 獲取標準拼音
+                        const standardPinyin = DataManager.getStandardPinyin(char, this.requireTones);
+                        
+                        if (standardPinyin) {
+                            // 填入正確答案
+                            input.value = standardPinyin;
+                            input.classList.add('correct');
+                            input.classList.remove('incorrect', 'invalid-tone');
+                            UIManager.hideErrorTip(input);
+                            
+                            // 更新拼音數據
+                            this.currentArticle.pinyins[index] = standardPinyin;
+                            
+                            // 標記為已完成，但用不同樣式表示是系統填入的
+                            currentChar.classList.add('completed');
+                            currentChar.classList.add('system-answer');
+                            
+                            // 記錄使用了提示的字符
+                            if (!this.articleHints[index]) {
+                                this.articleHints[index] = true;
+                                this.hintCount++; // 增加提示計數
+                            }
+                            
+                            // 顯示提示
+                            UIManager.showFeedback(`已顯示「${char}」的標準拼音: ${standardPinyin}`, 'info');
+                            
+                            // 找到下一個漢字並聚焦
+                            const nextChar = UIManager.findNextChineseChar(index);
+                            if (nextChar) {
+                                // 延遲一下讓用戶看到正確反饋
+                                setTimeout(() => {
+                                    nextChar.click();
+                                }, 300);
+                            } else {
+                                // 沒有下一個漢字，檢查是否完成所有
+                                UIManager.checkAllArticleInputs();
+                            }
+                            
+                            // 更新進度
+                            UIManager.updateProgress();
+                        } else {
+                            UIManager.showFeedback(`無法獲取「${char}」的標準拼音`, 'error');
+                        }
+                    } else {
+                        UIManager.showFeedback('請先點擊一個漢字', 'error');
+                    }
+                }
+            },
+            
+            // 完成當前練習
+            completeCurrentPractice() {
+                // 計算練習用時 - 確保用時計算是正確的
+                const currentTime = Date.now();
+                let timeSpent = 0;
+                
+                if (this.startTime > 0) {
+                    // 確保startTime比當前時間早，避免負值
+                    if (currentTime > this.startTime) {
+                        timeSpent = (currentTime - this.startTime) / 1000; // 轉換為秒
+                    } else {
+                        // 如果時間戳異常，直接使用1秒作為最小計時
+                        timeSpent = 1;
+                    }
+                    
+                    // 設定合理範圍 (最長2小時 = 7200秒)
+                    timeSpent = Math.min(timeSpent, 7200);
+                }
+                
+                console.log(`計算練習時間: ${timeSpent}秒`);
+                console.log(`開始時間: ${this.startTime}`);
+                console.log(`結束時間: ${currentTime}`);
+                console.log(`時間差: ${currentTime - this.startTime}毫秒`);
+                
+                // 播放完成音效
+                SoundManager.playCompletionSound();
+                
+                // 重置連擊計數器
+                ComboManager.reset();
+                
+                // 計算統計信息
+                let totalItems = 0;         // 總漢字數
+                let actualCompletedItems = 0; // 實際完成數（不包括跳過和提示）
+                
+                if (this.mode === 'vocabulary') {
+                    // 詞彙模式：計算漢字總數和實際完成的漢字數
+                    
+                    // 計算所有詞彙中漢字的總數
+                    let totalCharCount = 0;
+                    let validCompleteCount = 0;
+                    let hintCharCount = 0;
+                    let skippedCharCount = 0;
+                    
+                    this.vocabularyList.forEach((word, wordIndex) => {
+                        word.characters.forEach((char, charIndex) => {
+                            if (DataManager.isChineseCharacter(char)) {
+                                totalCharCount++; // 增加總字符數
+                                
+                                // 檢查該字符是否在被跳過的詞彙中
+                                if (word.skipped) {
+                                    skippedCharCount++;
+                                    return; // 跳過詞彙的字符不計入完成數
+                                }
+                                
+                                // 檢查是否有對應的字符容器被標記為跳過
+                                // 注意：這個檢查只在完成屏幕計算分數時有效，不是運行時檢查
+                                try {
+                                    const containerSelector = `.char-container[data-word-index="${wordIndex}"][data-char-index="${charIndex}"]`;
+                                    const container = document.querySelector(containerSelector);
+                                    if (container && container.classList.contains('skipped')) {
+                                        skippedCharCount++;
+                                        return; // 被標記為跳過的字符不計入完成數
+                                    }
+                                } catch (e) {
+                                    console.log("沒有找到對應的容器，可能是DOM已經被刷新", e);
+                                }
+                                
+                                // 檢查是否使用了提示
+                                const isHint = this.vocabularyHints[wordIndex] && 
+                                              this.vocabularyHints[wordIndex].includes(charIndex);
+                                
+                                if (isHint) {
+                                    hintCharCount++; // 增加提示字符數
+                                } else if (word.pinyins[charIndex]) {
+                                    // 只有在有拼音輸入、非提示、且詞彙未被跳過的情況下才算作有效完成
+                                    validCompleteCount++; // 增加有效完成數
+                                }
+                            }
+                        });
+                    });
+                    
+                    totalItems = totalCharCount;
+                    actualCompletedItems = validCompleteCount;
+                } else {
+                    // 文章模式：計算漢字數與實際完成數
+                    
+                    // 總漢字數
+                    const chineseChars = Array.from(this.currentArticle.content).filter(char => 
+                        DataManager.isChineseCharacter(char)
+                    );
+                    totalItems = chineseChars.length;
+                    
+                    // 計算實際完成的漢字數（不含使用提示和跳過的）
+                    let validCompleteCount = 0;
+                    
+                    for (let i = 0; i < this.currentArticle.characters.length; i++) {
+                        const char = this.currentArticle.characters[i];
+                        if (DataManager.isChineseCharacter(char)) {
+                            // 檢查是否是有效完成（有拼音，且沒使用提示，也未跳過）
+                            if (this.currentArticle.pinyins[i] && 
+                                !this.articleHints[i] && 
+                                !this.currentArticle.skippedChars[i]) {
+                                validCompleteCount++;
+                            }
+                        }
+                    }
+                    
+                    actualCompletedItems = validCompleteCount;
+                }
+                
+                // 計算最終分數
+                const totalScore = ScoreManager.calculateFinalScore(
+                    totalItems,
+                    actualCompletedItems,
+                    timeSpent,
+                    this.mode === 'article'
+                );
+                
+                // 生成分數報告HTML
+                const scoreReportHTML = ScoreManager.generateScoreReport(
+                    totalItems,
+                    actualCompletedItems,
+                    timeSpent,
+                    this.mode === 'article'
+                );
+                
+                // 先移除已存在的成績報告，避免重複顯示
+                const existingReport = document.getElementById('score-report-container');
+                if (existingReport) {
+                    existingReport.remove();
+                }
+                
+                // 將分數報告添加到完成頁面
+                const statsDisplay = document.getElementById('stats-display');
+                const scoreReportContainer = document.createElement('div');
+                scoreReportContainer.id = 'score-report-container';
+                scoreReportContainer.innerHTML = scoreReportHTML;
+                
+                // 插入到統計信息之前
+                if (statsDisplay && statsDisplay.parentNode) {
+                    statsDisplay.parentNode.insertBefore(scoreReportContainer, statsDisplay);
+                }
+                
+                // 隱藏分數顯示面板
+                ScoreManager.hideScoreDisplay();
+                
+                // 顯示完成畫面
+                UIManager.showCompletion({
+                    totalItems,
+                    timeSpent,
+                    skippedCount: this.skippedCount,
+                    hintCount: this.hintCount,
+                    actualCompletedItems,
+                    totalScore  // 添加總分
+                });
+            },
+            
+            // 重新開始當前練習
+            restartPractice() {
+                this.skippedCount = 0;
+                
+                if (this.mode === 'vocabulary') {
+                    // 重置詞彙練習
+                    this.currentWordIndex = 0;
+                    this.currentWord = this.vocabularyList[0];
+                    
+                    // 重置所有詞彙的跳過狀態
+                    this.vocabularyList.forEach(word => word.skipped = false);
+                    
+                    // 顯示練習界面
+                    UIManager.showScreen('practice');
+                    UIManager.setPracticeMode('vocabulary');
+                    UIManager.showVocabularyPractice(this.currentWord);
+                } else {
+                    // 重置文章練習
+                    this.currentArticle.skippedChars = {};
+                    
+                    UIManager.showScreen('practice');
+                    UIManager.setPracticeMode('article');
+                    UIManager.showArticlePractice(this.currentArticle);
+                    
+                    // 自動點擊第一個漢字
+                    setTimeout(() => {
+                        const firstChar = document.querySelector('.article-char');
+                        if (firstChar && DataManager.isChineseCharacter(firstChar.textContent)) {
+                            firstChar.click();
+                        }
+                    }, 300);
+                }
+                
+                // 更新進度
+                UIManager.updateProgress();
+                
+                // 重置開始時間
+                this.startTime = Date.now();
+            }
+        };
+        
+        // 學生身份變化時的處理函數
+        function handleStudentIdentityChange() {
+            const className = document.getElementById('student-class').value;
+            const studentId = document.getElementById('student-id').value;
+            const nameDisplay = document.getElementById('student-name-display');
+            const submitBtn = document.getElementById('submit-data');
+            
+            // 重置顯示
+            nameDisplay.textContent = '';
+            
+            // 如果班級和學號都已選擇
+            if (className && studentId) {
+                const studentName = DataManager.findStudentName(className, studentId);
+                
+                if (studentName) {
+                    // 找到學生，顯示姓名
+                    nameDisplay.textContent = studentName;
+                    
+                    // 啟用提交按鈕
+                    submitBtn.disabled = false;
+                    
+                    // 儲存學生資料
+                    GameLogic.studentData = {
+                        class: className,
+                        id: studentId,
+                        name: studentName
+                    };
+                } else {
+                    // 未找到學生
+                    nameDisplay.textContent = '未找到學生';
+                    
+                    // 禁用提交按鈕
+                    submitBtn.disabled = true;
+                    
+                    // 清除學生資料
+                    GameLogic.studentData = null;
+                }
+            } else {
+                // 班級或學號未選擇
+                nameDisplay.textContent = '';
+                
+                // 禁用提交按鈕
+                submitBtn.disabled = true;
+                
+                // 清除學生資料
+                GameLogic.studentData = null;
+            }
+        }
+        
+        // 表單提交功能
+        function submitToGoogleForm() {
+            // 如果未設置學生資料，則退出
+            if (!GameLogic.studentData) {
+                UIManager.showSubmitStatus('請先選擇學生身份', 'error');
+                return;
+            }
+            
+            // 獲取練習數據
+            const practiceStats = {
+                mode: GameLogic.mode === 'vocabulary' ? '詞彙模式' : '文章模式',
+                totalItems: document.getElementById('total-count').textContent,
+                timeSpent: document.getElementById('time-spent').textContent,
+                skippedCount: GameLogic.skippedCount.toString(),
+                hintCount: GameLogic.hintCount.toString(),
+                actualCompletedItems: document.getElementById('actual-count').textContent
+            };
+            
+            // 表單 ID
+            const formId = "1FAIpQLSfTynTpwcAlthtCLtxnjrxTRtS0f5phUlgido48wtc-XhTSSg";
+            
+            // 創建表單提交鏈接
+            let formUrl = `https://docs.google.com/forms/d/e/${formId}/viewform?usp=pp_url`;
+            
+            // 添加所有表單欄位
+            formUrl += `&entry.498950692=${encodeURIComponent(GameLogic.studentData.class)}`; // 班別
+            formUrl += `&entry.788735405=${encodeURIComponent(GameLogic.studentData.id)}`;    // 學號
+            formUrl += `&entry.1880367143=${encodeURIComponent(GameLogic.studentData.name)}`; // 姓名
+            formUrl += `&entry.1436069847=${encodeURIComponent(practiceStats.mode)}`;         // 練習模式
+            formUrl += `&entry.524212166=${encodeURIComponent(practiceStats.skippedCount)}`; // 跳過數量
+            
+            // 提交實際完成漢字數到表單的相應欄位
+            formUrl += `&entry.1907071484=${encodeURIComponent(practiceStats.actualCompletedItems)}`;   // 實際完成漢字數
+            
+            formUrl += `&entry.1890357766=${encodeURIComponent(practiceStats.timeSpent)}`;    // 用時
+            
+            // 使用提示數量作為額外信息提供，但不計入總分
+            formUrl += `&entry.1234567890=${encodeURIComponent(practiceStats.hintCount)}`;    // 使用提示數量
+            
+            // 這個字段不再需要，因為我們已經使用 actualCompletedItems 作為總題數
+            // formUrl += `&entry.2345678901=${encodeURIComponent(practiceStats.actualCompletedItems)}`; // 實際完成題數
+            
+            // 在新分頁中打開預填寫的表單
+            window.open(formUrl, '_blank');
+            
+            UIManager.showSubmitStatus('表單已打開，請完成提交', 'success');
+        }
+        
+        // 初始化音效系統
+        SoundManager.init();
+        
+        // 初始化連擊計數器
+        ComboManager.init();
+        
+        // 預設輸入內容
+        function setDefaultContent() {
+            // 詞彙模式預設內容 - 請在這裡修改預設詞彙
+            const defaultVocabulary = "散散步\n好處\n糊塗\n舒服\n藝術\n復活節\n從早到晚\n湖光山色\n名不虛傳\n教訓\n全體\n日月潭\n遠離\n市區";
+            document.getElementById('vocabulary-text').value = defaultVocabulary;
+            
+            // 文章模式預設內容 - 請在這裡修改預設文章
+            const defaultArticle = "老師常常告訴我們「學無止境」，除了課本，實在還有很多知識得學習呢。\n此時此刻，我們心中既對新生活充滿憧憬和盼望，又對母校依依不捨。";
+            document.getElementById('article-text').value = defaultArticle;
+        }
+        
+        // 頁面加載後設置默認內容
+        window.addEventListener('DOMContentLoaded', function() {
+            setDefaultContent();
+        });
+        
+        // 計算詞彙模式中所有漢字的總數
+        GameLogic.calculateTotalChineseChars = function() {
+            let totalCount = 0;
+            
+            // 如果是詞彙模式，計算所有詞彙中漢字的總數
+            if (this.mode === 'vocabulary' && this.vocabularyList.length > 0) {
+                this.vocabularyList.forEach(word => {
+                    word.characters.forEach(char => {
+                        if (DataManager.isChineseCharacter(char)) {
+                            totalCount++;
+                        }
+                    });
+                });
+            }
+            
+            return totalCount;
+        };
+        
+        // 初始化計分系統
+        ScoreManager.init();
+        
+        // 初始化遊戲
+        GameLogic.init();
+    </script>
+</body>
+</html>
